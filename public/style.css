@@ -90,7 +90,7 @@ header .logo img{height:48px;width:auto}
 #lerr{color:var(--bad);min-height:1.35em;text-align:center;--heft:2}
 
 /* Header */
-header{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 20px;background:#1a0612;border-bottom:2px solid #D9A13A;box-shadow:0 2px 0 #2b1606,0 5px 0 #0b020799;flex-wrap:wrap;position:relative;z-index:2}
+header{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 20px;background:#1a0612;border-bottom:2px solid #D9A13A;box-shadow:0 2px 0 #2b1606,0 5px 0 #0b020799;flex-wrap:wrap;position:relative;z-index:4}
 .tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .tools .sep{width:1px;height:26px;background:var(--line2);margin:0 2px}
 .roomchip{display:flex;align-items:center;gap:8px;padding:0 6px 0 12px;min-height:40px;background:#0008;border-radius:var(--r);box-shadow:inset 0 0 0 1px var(--copper)}
@@ -116,7 +116,7 @@ header{display:flex;justify-content:space-between;align-items:center;gap:10px;pa
 .tag.ok{background:#1f6b44;color:#e6ffef}
 
 main{flex:1;overflow-x:clip;display:flex;flex-direction:column;align-items:center;justify-content:flex-end}
-#stage{width:clamp(240px,calc(100vh - 454px),min(94vw,680px));margin:auto 0 0;position:relative;clip-path:inset(0 -100vw 0 -100vw)}
+#stage{width:clamp(240px,calc(100vh - 454px),min(94vw,680px));margin:auto 0 0;position:relative;z-index:1;clip-path:inset(0 -100vw 0 -100vw)}
 /* Round stage floor with a pink glow under the wheel, fades out when the camera zooms */
 #stage::after{content:"";position:absolute;left:50%;z-index:-1;pointer-events:none;transition:opacity .6s}
 #stage::after{width:80%;height:9%;bottom:.5%;transform:translateX(-50%);border-radius:50%;background:radial-gradient(closest-side,#e85aa0 0 38%,#b8306f 38% 62%,#7a1a4c 62% 82%,#4a0c2e 82%);box-shadow:0 0 0 2px #2b1606,inset 0 0 0 3px #D9A13A,inset 0 0 0 5px #2b1606,4px 6px 0 #0b0207aa}
@@ -127,7 +127,7 @@ main{flex:1;overflow-x:clip;display:flex;flex-direction:column;align-items:cente
 #wheel{width:100%;display:block;transform-origin:50% 4.1%;transition:transform .8s cubic-bezier(.45,0,.2,1);will-change:transform}
 #stage[data-zoom="1"] #wheel{transform:scale(1.18);transition-duration:.9s}
 #stage[data-zoom="2"] #wheel{transform:scale(1.95);transition-duration:1.3s}
-#say{min-height:42px;max-width:94vw;padding:10px 26px;background:#1f0816;border-radius:var(--r);box-shadow:inset 0 0 0 1.5px #D9A13A,inset 0 0 0 4px #1f0816,inset 0 0 0 5px #D9A13A66,0 0 0 2px #0b0207,4px 5px 0 #0b0207cc;--heft:2;font-size:16px;text-align:center;z-index:1;transition:background .3s,color .3s}
+#say{min-height:42px;max-width:94vw;padding:10px 26px;background:#1f0816;border-radius:var(--r);box-shadow:inset 0 0 0 1.5px #D9A13A,inset 0 0 0 4px #1f0816,inset 0 0 0 5px #D9A13A66,0 0 0 2px #0b0207,4px 5px 0 #0b0207cc;--heft:2;font-size:16px;text-align:center;position:relative;z-index:4;transition:background .3s,color .3s}
 #say.pop{animation:pop .35s var(--ease)}
 .won #say{background:var(--metal);color:#2b1606;box-shadow:inset 0 0 0 1.5px #2b1606,inset 0 -4px 0 #D9A13A,0 0 0 2px #0b0207,4px 5px 0 #0b0207cc}
 #clock{width:min(360px,80vw);height:5px;background:#0009;margin-top:8px;border-radius:3px;overflow:hidden}
@@ -387,4 +387,6 @@ dialog::backdrop{background:#050914cc;backdrop-filter:blur(2px)}
  .intro h2{font-size:32px!important}.ga>p.note[id]{font-size:14px;padding:8px 12px}
  .cell{font-size:11px;min-height:24px}.side{min-width:120px;min-height:80px}.big{font-size:32px}
  .pays{grid-template-columns:repeat(2,1fr)}.dhead{padding:12px 14px}.dbody{padding:14px}}
+/* Glove layers: deep (-1) under everything, mid (3) over the wheel and under the HUD, front (8 or 12) over the HUD */
+#people,#clock,#hist,#table{position:relative;z-index:4}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}

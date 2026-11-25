@@ -44,6 +44,18 @@ The wheel is random with two small leans (`pickIndex` in `public/core.js`):
 
 Example, 4 bettors: 3 on Ten holding 60% of the Orra. Ten weight = 1 - 0.12 x 0.75 - 0.12 x 0.6 = 0.84. Tuning: `CROWD_PLAYERS`, `CROWD_STAKE`, `CROWD_MAX` in `public/shared.js`.
 
+## The Glove
+
+`public/glove.js` is the white glove that spins the wheel and reacts to the game. It draws itself on its own canvas (no images) and never blocks clicks.
+
+- Rig: palm slab, 4 fingers x 3 joints, 3 thumb bones and a fading sleeve, rotated in 3D and projected (2.5D). Every joint, the orientation, position, depth and scale are springs, so poses blend without snapping.
+- Depth: closer means bigger, a longer and softer shadow, and the front HUD layer. Further means smaller, blurred, and under the HUD (`deep` under everything, `mid` over the wheel but under the table and header, `front` over all).
+- Wheel: each spin picks one of 4 corners and a force (flick, easy, firm, heave, monster). The force sets the wheel's turns and curve, the grip style, the wind up (the wheel is dragged back a little) and the follow through. The server still decides where the wheel lands and when.
+- Reactions: round start, bets, refused bets, ready, win, big win, loss, no bet, bonus landing, minigame win, minigame loss (middle finger, 5 deliveries), level up, players joining or leaving. Each has several gestures; idle has 16 behaviours (drift, prowl, creep, peek, drum, knuckle crack, knock on the screen, inspect, orbit, loom, shadowbox, count, conduct, thumb twiddle, rest, weave through the HUD).
+- Anti repetition: every pick (behaviour, gesture, corner, force, grip, path, screen spot) is weighted against its recent history.
+- Punches only spawn impact particles. Reduced motion settings get a calm glove and normal wheel spins.
+- Try a gesture from the browser console: `Glove._run('middleJab')`, `Glove._run('knock')`, `Glove._run('creep')`.
+
 ## Optional: run your own server
 
 The Node server still works and does not need the peer to peer layer:
@@ -58,6 +70,7 @@ Open http://localhost:8080. Node 18+, no `npm install`. The server reads `PORT` 
 
 - `public/core.js`: the game core (lobbies, wheel, economy, bonus host). Used by both `server.js` and the browser host.
 - `public/net.js`: peer to peer transport for GitHub Pages mode.
+- `public/glove.js`: the Glove (see above). `client.js` feeds it room updates and events and asks it before each spin.
 - `games/<category>/*.js`: 16 subgames. After changing one, run `node tools/bundle-games.js` to rebuild `public/games-bundle.js` for the browser.
 - `public/`: client, shared physics, renderers per category, `vendor/peerjs.min.js` (PeerJS 1.5.4, MIT).
 - `public/sfx/`: sound effects. `token_place.mp3` plays when a chip is placed, `no_tokens_left.mp3` when a bet is refused (not enough Orra or over the level limit).
