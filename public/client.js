@@ -25,7 +25,7 @@ const RH = (() => {
   const send = o => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); };
   let S = null, catalog = {}, players = {};
   function connect() {
-    ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host);
+    ws = window.RH_SERVER ? new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host) : RHNet.connect();
     ws.onopen = () => { send({ t: 'hello', token, name: myName || 'Player' }); };
     ws.onmessage = e => { const m = JSON.parse(e.data); onMsg(m); };
     ws.onclose = () => { toast('Connection lost. Reconnecting...'); setTimeout(connect, 1500); };
@@ -34,7 +34,7 @@ const RH = (() => {
   function onMsg(m) {
     if (m.t === 'pong') { const rtt = Date.now() - m.c; if (rtt <= bestRtt * 1.5) { bestRtt = Math.min(bestRtt, rtt); off = m.s - (m.c + rtt / 2); } return; }
     if (m.t === 'hello') { token = m.token; store.set('rh-token', token); send({ t: 'ping', c: Date.now() }); if (roomCode) send({ t: 'join', code: roomCode }); return; }
-    if (m.t === 'err') { if (!S) { $('lerr').textContent = m.msg; if (/No lobby/.test(m.msg)) roomCode = null; } else toast(m.msg); return; }
+    if (m.t === 'err') { if (!S) { $('lerr').textContent = m.msg; if (/No lobby/.test(m.msg)) roomCode = null; } else { toast(/No lobby/.test(m.msg) ? 'The host left, so this lobby is closed.' : m.msg); if (/No lobby/.test(m.msg)) { try { sessionStorage.removeItem('rh-room'); } catch {} setTimeout(() => location.href = location.pathname, 3000); } } return; }
     if (m.t === 'catalog') { catalog = m.games; return; }
     if (m.t === 'room') { if (bestRtt > 1e8) off = m.now - Date.now(); onRoom(m); return; }
     if (m.t === 'bonus') return Bonus.update(m);
