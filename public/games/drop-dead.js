@@ -127,7 +127,7 @@
       for (const p of api.players) {
         const c = el.querySelector('#tl-' + p.id); if (!c) continue;
         const s = (st.bk || {})[p.id] || {};
-        drawBoard(c.getContext('2d'), { vals: v.vals, pegs: RHS.basePegs(), hit: v.landed[p.id], pucks: v.tilted[p.id] ? [] : smooth(s).map(q => ({ ...q, c: p.color })), after: x => { if (v.tilted[p.id]) { x.fillStyle = '#c8323c'; x.font = '700 90px ' + RH.FONT; x.textAlign = 'center'; x.fillText('TILT', 300, 360); } } });
+        drawBoard(c.getContext('2d'), { vals: v.vals, pegs: RHS.basePegs(), hit: v.landed[p.id], pucks: v.tilted[p.id] ? [] : smooth(s).map(q => ({ ...q, c: p.color })), after: x => { if (v.tilted[p.id]) { x.fillStyle = '#c8323c'; RH.heft(x, 90, 3); x.textAlign = 'center'; RH.htext(x, 'TILT', 300, 360); } } });
       }
     }
   };
