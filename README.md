@@ -63,13 +63,15 @@ Example, 4 bettors: 3 on Ten holding 60% of the Orra. Ten weight = 1 - 0.12 x 0.
 
 `public/glove.js` is the white glove that spins the wheel and reacts to the game. It draws itself on its own canvas (no images) and never blocks clicks.
 
-- Rig: palm slab, 4 fingers x 3 joints, 3 thumb bones and a fading sleeve, rotated in 3D and projected (2.5D). Every joint, the orientation, position, depth and scale are springs, so poses blend without snapping.
+- Rig: palm slab, 4 fingers x 3 joints, 3 thumb bones and a fading sleeve, rotated in 3D and projected (2.5D). Every joint, the orientation, position, depth and scale are springs, so poses blend without snapping. Fingers settle one after another, moves carry the hand's momentum into the next path, and a wheel grab eases onto the contact point.
+- Draw order: bones are sorted against the palm plane (under the palm or over it), not by depth alone, so curled fingers and the thumb never poke through the palm while the hand turns. The palm is a bevelled solid slab and the cuff hem wraps behind the wrist.
 - Depth: closer means bigger, a longer and softer shadow, and the front HUD layer. Further means smaller, blurred, and under the HUD (`deep` under everything, `mid` over the wheel but under the table and header, `front` over all).
 - Wheel: each spin picks one of 4 corners and a force (flick, easy, firm, heave, monster). The force sets the wheel's turns and curve, the grip style, the wind up (the wheel is dragged back a little) and the follow through. The server still decides where the wheel lands and when.
-- Reactions: round start, bets, refused bets, ready, win, big win, loss, no bet, bonus landing, minigame win, minigame loss (middle finger, 5 deliveries), level up, players joining or leaving. Each has several gestures; idle has 16 behaviours (drift, prowl, creep, peek, drum, knuckle crack, knock on the screen, inspect, orbit, loom, shadowbox, count, conduct, thumb twiddle, rest, weave through the HUD).
+- Reactions: round start, bets, refused bets, ready, win, big win, loss, no bet, bonus landing, minigame win, minigame loss (middle finger, 5 deliveries), level up, players joining or leaving. Each has several gestures; idle has 18 behaviours (drift, prowl, creep, peek, drum, knuckle crack, knock on the screen, inspect, orbit, loom, shadowbox, count, conduct, thumb twiddle, rest, weave through the HUD, stretch, two finger stroll). Gestures include coin flip, chef's kiss, rock on, shaka, table slam, sweep, hurry up twirl, gun twirl with holster, fingers crossed (while the wheel spins) and a dizzy wobble after monster spins.
 - Anti repetition: every pick (behaviour, gesture, corner, force, grip, path, screen spot) is weighted against its recent history.
 - Punches only spawn impact particles. Reduced motion settings get a calm glove and normal wheel spins.
-- Try a gesture from the browser console: `Glove._run('middleJab')`, `Glove._run('knock')`, `Glove._run('creep')`.
+- Try a gesture from the browser console: `Glove._run('middleJab')`, `Glove._run('knock')`, `Glove._run('creep')`, `Glove._run('coinFlip')`.
+- Sound slots without samples yet are marked `todo` in `sfx.js` and play a fallback (or nothing) until their files are added.
 
 ## Optional: run your own server
 
