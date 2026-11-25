@@ -56,7 +56,8 @@ header .logo img{height:48px;width:auto}
 .life>div{display:grid;justify-items:center;gap:2px;min-width:118px;padding:7px 14px 6px;border-radius:var(--r);background:#0006;box-shadow:inset 0 0 0 1px var(--line2)}
 .life small{font-size:11px;--track:1.5px;text-transform:uppercase;color:var(--mute)}
 .life b{display:inline-flex;align-items:center;gap:5px;font-size:21px;--heft:3;font-variant-numeric:tabular-nums}
-.life .won b{color:var(--good)}.life .lost b{color:var(--bad)}
+.life .won b{color:var(--good)}.life .lost b{color:var(--bad)}.life .wal b{color:var(--gold)}
+@media(max-width:420px){.life{gap:6px}.life>div{min-width:0;flex:1;padding:7px 6px 6px}.life b{font-size:18px}}
 .view{display:grid;gap:16px}
 .hint{font-size:12.5px;color:var(--mute);margin-top:7px}
 /* Run settings */
@@ -76,7 +77,7 @@ header .logo img{height:48px;width:auto}
 .seg button.on{background:var(--metal);color:#2b1606;--heft:2.5;box-shadow:inset 0 1px 0 #FFF0B8,inset 0 -2px 0 #D9A13A,0 0 0 1.5px #2b1606}
 .sacts{display:flex;gap:8px;border-top:1px solid var(--line2);padding-top:14px}
 .sacts .go{flex:1}
-@media(max-width:480px){.opts{gap:28px}.seg{gap:3px;padding:4px}.seg button{padding:0 7px;font-size:13px}}
+@media(max-width:480px){#lobby .card{padding:24px 16px 18px}.opts{gap:28px}.seg{gap:3px;padding:4px}.seg button{padding:0 7px;font-size:13px}}
 #lobby label{display:grid;gap:6px;--heft:1.5;--track:.5px;font-size:13px;text-transform:uppercase;color:var(--mute)}
 #lobby label input{text-transform:none;--heft:0;--track:0px;font-size:16px;color:var(--pearl)}
 #lobby .chk{display:flex;gap:8px;align-items:center;--heft:0;--track:0px;text-transform:none;font-size:14px;cursor:pointer}

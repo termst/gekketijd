@@ -52,7 +52,7 @@ const RH = (() => {
   setInterval(() => send({ t: 'ping', c: Date.now() }), 4000);
   function onMsg(m) {
     if (m.t === 'pong') { const rtt = Date.now() - m.c; if (rtt <= bestRtt * 1.5) { bestRtt = Math.min(bestRtt, rtt); off = m.s - (m.c + rtt / 2); } return; }
-    if (m.t === 'hello') { if (!S && 'won' in m) lifeStats(m.won, m.lost); token = m.token; store.set('rh-token', token); send({ t: 'ping', c: Date.now() }); if (roomCode) send({ t: 'join', code: roomCode }); return; }
+    if (m.t === 'hello') { if (!S && 'won' in m) lifeStats(m.won, m.lost, m.bal); token = m.token; store.set('rh-token', token); send({ t: 'ping', c: Date.now() }); if (roomCode) send({ t: 'join', code: roomCode }); return; }
     if (m.t === 'err') { if (!S) { $('lerr').textContent = m.msg; if (/No lobby/.test(m.msg)) roomCode = null; } else { if (/Orra|maximum/.test(m.msg)) { sfx('no_tokens_left'); pendingRepeat = false; } toast(/No lobby/.test(m.msg) ? 'The host left, so this lobby is closed.' : m.msg, 3200, 'bad'); if (/No lobby/.test(m.msg)) { try { sessionStorage.removeItem('rh-room'); } catch {} setTimeout(() => location.href = location.pathname, 3000); } } return; }
     if (m.t === 'catalog') { catalog = m.games; return; }
     if (m.t === 'room') { if (bestRtt > 1e8) off = m.now - Date.now(); onRoom(m); return; }
@@ -73,11 +73,11 @@ const RH = (() => {
   ];
   const RUN_DEF = { start: 0, bet: 8, spin: 'normal', limit: 'level', late: 'on', boost: 'on', max: 8 };
   let runCfg = (() => { try { const c = JSON.parse(store.get('rh-cfg') || 'null'); return { ...RUN_DEF, ...(c || {}) }; } catch { return { ...RUN_DEF }; } })();
-  function lifeStats(won, lost) { $('lwon').textContent = fmt(won || 0); $('llost').textContent = fmt(lost || 0); }
+  function lifeStats(won, lost, wallet) { $('lwon').textContent = fmt(won || 0); $('llost').textContent = fmt(lost || 0); $('lwal').textContent = fmt(wallet == null ? 500 : wallet); }
   function lobby() {
     const q = new URLSearchParams(location.search), j = (q.get('join') || '').toUpperCase().slice(0, 4);
     $('nm').value = myName; $('jc').value = j;
-    try { const p = JSON.parse(store.get('rh-prof') || 'null'); if (p) lifeStats(p.won, p.lost); } catch {}
+    try { const p = JSON.parse(store.get('rh-prof') || 'null'); lifeStats(p && p.won, p && p.lost, p && p.bal); } catch {}
     if (j) { $('joinbox').querySelector('h3').textContent = `You are invited to lobby ${j}`; }
     const name = () => { myName = $('nm').value.trim().slice(0, 16); if (!myName) { $('lerr').textContent = 'Enter a name first.'; $('nm').focus(); return false; } store.set('rh-name', myName); send({ t: 'hello', token, name: myName }); return true; };
     const view = v => { $('home').hidden = v !== 'home'; $('setup').hidden = v !== 'setup'; $('lobby').classList.toggle('wide', v === 'setup'); $('lerr').textContent = ''; };
@@ -419,7 +419,7 @@ const RH = (() => {
     const c = S.me.cashier, me = S.me, pct = (a, b) => Math.max(0, Math.min(100, a / b * 100)).toFixed(1) + '%', nolim = me.limit >= 1e9;
     if (c.closed) {
       $('workbody').innerHTML = `<div class="cards"><section class="dcard"><h3>Run balance</h3><p class="stat">${ORRA}${fmt(me.bal - myTot)}</p><p class="note">Everyone started on ${fmt(S.cfg.start)} Orra. Wages and daily bonus only work in Own wallet lobbies.</p></section>
- <section class="dcard"><h3>Own wallet</h3><p class="stat">${ORRA}${fmt(me.wallet)}<small>saved ${fmt(me.vault.run)} of ${fmt(me.vault.cap)} this run</small></p><div class="meter"><i style="width:${pct(me.vault.run, me.vault.cap)}"></i></div><p class="note">Part of each win is saved here. Higher multiplier, bigger share. Huge wins count less, and the share drops as the cap fills. Today: ${fmt(me.vault.today)} of ${fmt(me.vault.day)}. Spend it in an Own wallet lobby.</p></section>
+ <section class="dcard"><h3>Own wallet</h3><p class="stat">${ORRA}${fmt(me.wallet)}<small>saved ${fmt(me.vault.run)} of ${fmt(me.vault.cap)} this run</small></p><div class="meter"><i style="width:${pct(me.vault.run, me.vault.cap)}"></i></div><p class="note">Part of each win is saved here. Higher multiplier, bigger share. Huge wins count less, the share drops as the cap fills, and solo tables save half. Today: ${fmt(me.vault.today)} of ${fmt(me.vault.day)}. Spend it in an Own wallet lobby.</p></section>
  <section class="dcard"><h3>Level ${me.lvl}</h3><p class="stat">${nolim ? 'No limit' : fmt(me.limit)}<small>max bet per round</small></p><div class="meter"><i style="width:${pct(me.xp, me.need)}"></i></div><p class="note">${fmt(me.need - me.xp)} XP to level ${me.lvl + 1}.</p></section></div>`;
       return;
     }
