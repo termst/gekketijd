@@ -48,6 +48,9 @@ select{min-height:32px;padding:4px 8px}
 #lobby.wide .card{width:min(760px,100%)}
 #lobby .card{width:min(460px,100%);background:#210a17;border:1px solid var(--copper);border-radius:10px;box-shadow:var(--shadow),inset 0 0 0 6px #3f1328,inset 0 0 0 7px #8a6c3255;padding:30px 28px 22px;display:grid;gap:16px;animation:rise .4s var(--ease)}
 #lobby .logo{font-size:44px;text-align:center}
+.logo img{display:block;height:auto;filter:drop-shadow(0 6px 10px #0009)}
+#lobby .logo img{width:min(400px,100%);margin:-8px auto 0}
+header .logo img{height:48px;width:auto}
 /* Lifetime stats under the logo */
 .life{display:flex;justify-content:center;gap:10px;margin-top:-4px}
 .life>div{display:grid;justify-items:center;gap:2px;min-width:118px;padding:7px 14px 6px;border-radius:var(--r);background:#0006;box-shadow:inset 0 0 0 1px var(--line2)}
@@ -372,7 +375,7 @@ dialog::backdrop{background:#050914cc;backdrop-filter:blur(2px)}
 
 @media(max-width:980px){#quay{flex-wrap:wrap;justify-content:center}.info{width:100%;justify-content:space-around}#stage{width:clamp(220px,calc(100vh - 543px),min(92vw,560px))}#street{gap:12px}.house{height:76px}.plq{height:46px;min-width:46px;margin-top:-17px}.plq .n{font-size:36px}.medal{width:58px;height:58px;margin:-29px 0 0 -29px}}
 @media(max-width:700px){
- header{padding:6px 10px;gap:6px;justify-content:center}.logo{font-size:24px}.tools{gap:6px;font-size:13.5px;justify-content:center}.tools .sep{display:none}.btn{padding:0 10px}.tools .btn,.roomchip{min-height:34px}
+ header{padding:6px 10px;gap:6px;justify-content:center}.logo{font-size:24px}header .logo img{height:40px}.tools{gap:6px;font-size:13.5px;justify-content:center}.tools .sep{display:none}.btn{padding:0 10px}.tools .btn,.roomchip{min-height:34px}
  #street{gap:8px}.tgrp{gap:6px}.house{height:70px}.tk{--m:radial-gradient(circle 5px at 0 50%,#0000 96%,#000) left/51% 100% no-repeat,radial-gradient(circle 5px at 100% 50%,#0000 96%,#000) right/51% 100% no-repeat;border-radius:8px}
  .stub{width:15%}.face::before{inset:4px 4px 4px 3px;border-radius:5px}.num .face::after{display:none}.plq{height:36px;min-width:34px;padding:0 5px;margin-top:-15px;border-radius:7px}.plq .n{font-size:28px;margin-top:-1px}.stub::after{top:5px;bottom:5px}.num .stub::before{width:7px;height:7px;box-shadow:0 0 0 1.5px #2b1606}
  .ttl{--fmax:16px;--fs:var(--fsm);width:92%;margin-top:-9px}.bonus.lit .ttl{width:92%;margin-right:0}.ttl .n{--track:0px;text-shadow:-1px -1px 0 #2b1606,1px -1px 0 #2b1606,-1px 1px 0 #2b1606,1px 1px 0 #2b1606,1.5px 2.5px 0 #2b1606}.house .p{font-size:10px;letter-spacing:.4px;padding:1px 5px 0;bottom:4px}
