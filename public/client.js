@@ -1,5 +1,5 @@
 'use strict';
-// Rare Hours client: lobby, main wheel, table, bonus overlay host. Subgame renderers live in games/*.js
+// Gekke Tijd client: lobby, main wheel, table, bonus overlay host. Subgame renderers live in games/*.js
 const RH = (() => {
   const $ = id => document.getElementById(id), TAU = Math.PI * 2;
   const { TYPES, KEYS, DIAL, BONUS_KEYS } = RHS, N = DIAL.length;
@@ -14,6 +14,8 @@ const RH = (() => {
   // Orra: the currency. A ring holding an hourglass, with a stem through it like a dollar sign.
   const ORRA = '<svg class="orra" viewBox="0 0 24 24" aria-label="Orra"><circle cx="12" cy="12" r="8.6" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M8.4 7.2h7.2L12 12l3.6 4.8H8.4L12 12z" fill="currentColor"/><path d="M12 0.5v3.4M12 20.1v3.4" stroke="currentColor" stroke-width="2.4"/></svg>';
   const orra = n => `${ORRA}${fmt(n)}`;
+  const short = n => n >= 1e4 ? (Math.round(n / 1e3) + 'K') : n >= 1e3 ? (Math.round(n / 100) / 10 + 'K') : String(n);
+  const initials = n => (String(n).replace(/[^\p{L}\p{N}]/gu, '') || '?').slice(0, 2).toUpperCase();
 
   // ---- Sound ----
   let sound = store.get('rh-sound') !== 'off', ac;
@@ -50,7 +52,7 @@ const RH = (() => {
   setInterval(() => send({ t: 'ping', c: Date.now() }), 4000);
   function onMsg(m) {
     if (m.t === 'pong') { const rtt = Date.now() - m.c; if (rtt <= bestRtt * 1.5) { bestRtt = Math.min(bestRtt, rtt); off = m.s - (m.c + rtt / 2); } return; }
-    if (m.t === 'hello') { token = m.token; store.set('rh-token', token); send({ t: 'ping', c: Date.now() }); if (roomCode) send({ t: 'join', code: roomCode }); return; }
+    if (m.t === 'hello') { if (!S && 'won' in m) lifeStats(m.won, m.lost); token = m.token; store.set('rh-token', token); send({ t: 'ping', c: Date.now() }); if (roomCode) send({ t: 'join', code: roomCode }); return; }
     if (m.t === 'err') { if (!S) { $('lerr').textContent = m.msg; if (/No lobby/.test(m.msg)) roomCode = null; } else { if (/Orra|maximum/.test(m.msg)) { sfx('no_tokens_left'); pendingRepeat = false; } toast(/No lobby/.test(m.msg) ? 'The host left, so this lobby is closed.' : m.msg, 3200, 'bad'); if (/No lobby/.test(m.msg)) { try { sessionStorage.removeItem('rh-room'); } catch {} setTimeout(() => location.href = location.pathname, 3000); } } return; }
     if (m.t === 'catalog') { catalog = m.games; return; }
     if (m.t === 'room') { if (bestRtt > 1e8) off = m.now - Date.now(); onRoom(m); return; }
@@ -59,17 +61,47 @@ const RH = (() => {
   }
 
   // ---- Lobby screen ----
+  // Run settings shown when creating a lobby. Values mirror RUN_OPTS in core.js, which checks them again.
+  const RUN = [
+    ['start', 'Starting balance', 'Own wallet uses your saved Orra. A fixed amount gives everyone the same fresh start.', [[0, 'Own wallet'], [500, '500'], [1000, '1K'], [2500, '2.5K'], [5000, '5K'], [10000, '10K']]],
+    ['bet', 'Betting time', 'Seconds to place bets each round.', [5, 8, 12, 15, 20, 30].map(v => [v, v + 's'])],
+    ['spin', 'Wheel spin time', 'How long the wheel turns before it lands.', [['short', 'Short 2-4s'], ['normal', 'Normal 3-7s'], ['long', 'Long 6-10s']]],
+    ['limit', 'Max bet per round', 'Level limit grows as you level up.', [['level', 'Level limit'], ['none', 'No limit']], 1],
+    ['late', 'Late buy-ins', 'Join bonus games you did not back.', [['on', 'On'], ['off', 'Off']], 1],
+    ['boost', 'Prime Minute', 'One field per round boosted x2 to x5.', [['on', 'On'], ['off', 'Off']], 1],
+    ['max', 'Max players', 'Lobby size, you included.', [2, 3, 4, 5, 6, 7, 8].map(v => [v, String(v)])]
+  ];
+  const RUN_DEF = { start: 0, bet: 8, spin: 'normal', limit: 'level', late: 'on', boost: 'on', max: 8 };
+  let runCfg = (() => { try { const c = JSON.parse(store.get('rh-cfg') || 'null'); return { ...RUN_DEF, ...(c || {}) }; } catch { return { ...RUN_DEF }; } })();
+  function lifeStats(won, lost) { $('lwon').textContent = fmt(won || 0); $('llost').textContent = fmt(lost || 0); }
   function lobby() {
     const q = new URLSearchParams(location.search), j = (q.get('join') || '').toUpperCase().slice(0, 4);
     $('nm').value = myName; $('jc').value = j;
+    try { const p = JSON.parse(store.get('rh-prof') || 'null'); if (p) lifeStats(p.won, p.lost); } catch {}
     if (j) { $('joinbox').querySelector('h3').textContent = `You are invited to lobby ${j}`; }
     const name = () => { myName = $('nm').value.trim().slice(0, 16); if (!myName) { $('lerr').textContent = 'Enter a name first.'; $('nm').focus(); return false; } store.set('rh-name', myName); send({ t: 'hello', token, name: myName }); return true; };
-    $('cc').onchange = () => { $('cv').disabled = !$('cc').checked; if ($('cc').checked) $('cv').focus(); };
+    const view = v => { $('home').hidden = v !== 'home'; $('setup').hidden = v !== 'setup'; $('lobby').classList.toggle('wide', v === 'setup'); $('lerr').textContent = ''; };
+    const opts = () => {
+      $('opts').innerHTML = RUN.map(([k, t, d, vals, half]) => `<div class="opt${half ? ' half' : ''}"><div class="olab"><b>${t}</b><small>${d}</small></div><div class="seg" role="radiogroup" aria-label="${t}">${vals.map(([v, l]) => `<button type="button" role="radio" data-k="${k}" data-v="${v}" aria-checked="${runCfg[k] === v}" class="${runCfg[k] === v ? 'on' : ''}">${l}</button>`).join('')}</div></div>`).join('');
+      $('opts').querySelectorAll('.seg button').forEach(b => b.onclick = () => {
+        const k = b.dataset.k, row = RUN.find(r => r[0] === k), v = row[3].find(x => String(x[0]) === b.dataset.v)[0];
+        runCfg[k] = v; store.set('rh-cfg', JSON.stringify(runCfg)); tone(520, .04, .03); opts();
+        $('opts').querySelector(`[data-k="${k}"][data-v="${b.dataset.v}"]`).focus();
+      });
+    };
+    let pickCode = '';
     $('cb').onclick = () => {
       if (!name()) return;
-      let code = '';
-      if ($('cc').checked) { code = $('cv').value.toUpperCase().trim(); if (!/^[A-Z0-9]{4}$/.test(code)) { $('lerr').textContent = 'A custom code must be exactly 4 letters or digits.'; return; } }
-      $('lerr').textContent = ''; roomCode = null; setTimeout(() => send({ t: 'create', code }), 50);
+      pickCode = $('cv').value.toUpperCase().trim();
+      if (pickCode && !/^[A-Z0-9]{4}$/.test(pickCode)) { $('lerr').textContent = 'A custom code must be exactly 4 letters or digits, or leave it empty.'; $('cv').focus(); return; }
+      $('scode').innerHTML = pickCode ? `Code <b>${esc(pickCode)}</b>` : 'Random code';
+      view('setup'); opts(); $('sgo').focus();
+    };
+    $('sback').onclick = () => { view('home'); $('cv').focus(); };
+    $('sreset').onclick = () => { runCfg = { ...RUN_DEF }; store.set('rh-cfg', JSON.stringify(runCfg)); opts(); };
+    $('sgo').onclick = () => {
+      if (!name()) { view('home'); return; }
+      $('lerr').textContent = 'Opening lobby...'; roomCode = null; setTimeout(() => send({ t: 'create', code: pickCode, cfg: runCfg }), 50);
     };
     $('jb').onclick = () => {
       if (!name()) return;
@@ -241,7 +273,7 @@ const RH = (() => {
     c.beginPath(); c.arc(0, 0, 95, 0, TAU); c.lineWidth = 1.5; c.strokeStyle = INK; c.stroke();
     // Logo: our display face, slanted, flat gold with an inked offset shadow and a swash
     c.save(); c.transform(1, 0, -.18, 1, 0, 0); c.textAlign = 'center'; c.textBaseline = 'middle'; c.lineJoin = 'round';
-    const lines = [['Rare', -20, 48], ['Hours', 25, 50]];
+    const lines = [['Gekke', -20, 44], ['Tijd', 25, 52]];
     for (const [s, y, f] of lines) { heft(c, f, 3); c.fillStyle = INK; c.fillText(s, 3, y + 4); c.lineWidth = 3; c.strokeStyle = INK; c.strokeText(s, 0, y); }
     for (const [s, y, f] of lines) { heft(c, f, 3); c.fillStyle = TITLE; htext(c, s, 0, y); }
     c.restore();
@@ -322,6 +354,7 @@ const RH = (() => {
   }
 
   // ---- Table ----
+  const GROUPS = { num: KEYS.filter(k => TYPES[k].pay), bonus: BONUS_KEYS };
   let chip = 5, myTot = 0, pendingRepeat = false, lastPhase = null, lastRound = -1, lastWinShown = null;
   function setupTable() {
     cx = $('wheel').getContext('2d');
@@ -332,8 +365,10 @@ const RH = (() => {
       const name = esc(t.n).replace('Productivitime', 'Producti&shy;vitime'), long = s => Math.max(...s.split(' ').map(w => w.length));
       return `<button class="house bonus" id="h-${k}" style="--tk:${s.tk};--i:${i};--fs:${Math.min(32, 180 / long(t.n)).toFixed(1)};--fsm:${Math.min(32, 200 / long(name.replace('&shy;', ' '))).toFixed(1)}" aria-label="Bet on bonus game ${t.n}"><span class="tk"><span class="stub">${medal(k)}</span><span class="face"><span class="ttl"><span class="n">${name}</span></span><span class="p">Bonus<i> game</i></span></span></span><span class="dots"></span><span class="stake"></span></button>`;
     };
-    const badge = `<span class="medal" aria-hidden="true">${STACK_BADGE}</span>`;
-    $('street').innerHTML = `<div class="tgrp">${KEYS.filter(k => TYPES[k].pay).map(ticket).join('')}${badge}</div><div class="tgrp">${BONUS_KEYS.map(ticket).join('')}${badge}</div>`;
+    // The badge between each group of 4 tickets bets the selected chip on all 4 at once. Repeated clicks stack.
+    const badge = (g, l) => `<button class="medal" id="g-${g}" aria-label="Bet the selected chip on all 4 ${l}" title="Bet on all 4">${STACK_BADGE}</button>`;
+    $('street').innerHTML = `<div class="tgrp">${GROUPS.num.map(ticket).join('')}${badge('num', 'number fields')}</div><div class="tgrp">${GROUPS.bonus.map(ticket).join('')}${badge('bonus', 'bonus fields')}</div>`;
+    Object.keys(GROUPS).forEach(g => $('g-' + g).onclick = () => placeGroup(g));
     KEYS.forEach(k => { $('h-' + k).onclick = () => placeBet(k); $('h-' + k).oncontextmenu = e => { e.preventDefault(); send({ t: 'unbet', key: k }); }; });
     $('quay').innerHTML = '<div class="info">' + [['bal', 'Balance'], ['bet', 'Total bet'], ['win', 'Win']].map(([i, t]) => `<div><small>${t}</small><b>${ORRA}<span id="${i}">0</span></b></div>`).join('') + '</div><div class="chips">' + COINS.map(c => `<button class="coin" data-v="${c[0]}" aria-label="Chip ${c[0]} Orra">${chipSvg(c)}</button>`).join('') + '</div><div class="acts"><button class="btn" id="clear">Clear</button><button class="btn" id="again">Repeat</button><button class="btn go" id="go">Ready</button></div>';
     document.querySelectorAll('.coin').forEach(b => b.onclick = () => { chip = +b.dataset.v; renderChips(); });
@@ -354,27 +389,39 @@ const RH = (() => {
     requestAnimationFrame(clockLoop);
   }
   // Chips are the betting tokens. Check locally first so an impossible bet gets instant feedback.
+  function canBet(n, el) {
+    const me = S.me, avail = me.bal - myTot, need = chip * n;
+    const deny = t => { sfx('no_tokens_left'); toast(t, 2600, 'bad'); el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake'); return false; };
+    if (avail < 5) return deny(S.me.cashier.closed ? 'No Orra left in this run.' : 'No Orra left to bet. Open the Cashier to collect more.');
+    if (need > avail) return deny(n > 1 ? `Betting ${fmt(chip)} on all 4 needs ${fmt(need)} Orra. You have ${fmt(avail)} left.` : `Only ${fmt(avail)} Orra left. Pick a smaller chip.`);
+    if (myTot + need > me.limit) return deny(`Level ${me.lvl} limit: ${fmt(me.limit)} Orra per round.`);
+    return true;
+  }
   function placeBet(k) {
-    if (!S) return;
-    const me = S.me, avail = me.bal - myTot, h = $('h-' + k);
-    const deny = t => { sfx('no_tokens_left'); toast(t, 2600, 'bad'); h.classList.remove('shake'); void h.offsetWidth; h.classList.add('shake'); };
-    if (avail < 5) return deny('No Orra left to bet. Open the Cashier to collect more.');
-    if (chip > avail) return deny(`Only ${fmt(avail)} Orra left. Pick a smaller chip.`);
-    if (myTot + chip > me.limit) return deny(`Level ${me.lvl} limit: ${fmt(me.limit)} Orra per round.`);
+    if (!S || !canBet(1, $('h-' + k))) return;
     send({ t: 'bet', key: k, amt: chip }); sfx('token_place');
+  }
+  function placeGroup(g) {
+    if (!S || !canBet(4, $('g-' + g))) return;
+    send({ t: 'bets', keys: GROUPS[g], amt: chip }); sfx('token_place');
   }
   function renderChips() { document.querySelectorAll('.coin').forEach(b => { b.classList.toggle('on', +b.dataset.v === chip); b.setAttribute('aria-pressed', +b.dataset.v === chip); }); }
   function clockLoop() {
     if (S) {
       const el = $('clock').firstChild;
       const left = S.phase === 'betting' && S.ends ? S.ends - now() : 0;
-      el.style.width = Math.max(0, Math.min(100, left / 80)) + '%'; $('clock').classList.toggle('low', left > 0 && left < 3000);
+      el.style.width = Math.max(0, Math.min(100, left / (S.cfg ? S.cfg.bet * 10 : 80))) + '%'; $('clock').classList.toggle('low', left > 0 && left < 3000);
     }
     Bonus.tick();
     requestAnimationFrame(clockLoop);
   }
   function shop() {
-    const c = S.me.cashier, me = S.me, pct = (a, b) => Math.max(0, Math.min(100, a / b * 100)).toFixed(1) + '%';
+    const c = S.me.cashier, me = S.me, pct = (a, b) => Math.max(0, Math.min(100, a / b * 100)).toFixed(1) + '%', nolim = me.limit >= 1e9;
+    if (c.closed) {
+      $('workbody').innerHTML = `<div class="cards"><section class="dcard"><h3>Run balance</h3><p class="stat">${ORRA}${fmt(me.bal - myTot)}</p><p class="note">This run started everyone on ${fmt(S.cfg.start)} Orra. Wages and the daily bonus are paused until you play in a lobby with your own wallet.</p></section>
+ <section class="dcard"><h3>Level ${me.lvl}</h3><p class="stat">${nolim ? 'No limit' : fmt(me.limit)}<small>max bet per round</small></p><div class="meter"><i style="width:${pct(me.xp, me.need)}"></i></div><p class="note">${fmt(me.need - me.xp)} XP to level ${me.lvl + 1}.</p></section></div>`;
+      return;
+    }
     $('workbody').innerHTML = `<div class="cards">
  <section class="dcard"><h3>Wages, level ${c.work}</h3><p class="stat">${ORRA}${fmt(c.pending)}<small>of ${fmt(c.cap)}</small></p><div class="meter"><i style="width:${pct(c.pending, c.cap)}"></i></div>
   <p class="note">You earn ${c.rate} Orra per minute, up to ${fmt(c.cap)}.</p>
@@ -382,7 +429,7 @@ const RH = (() => {
   <button class="btn" id="w2" ${c.work >= 10 || me.bal < c.upCost ? 'disabled' : ''}>${c.work >= 10 ? 'Maximum level' : 'Upgrade to level ' + (c.work + 1) + ' for ' + fmt(c.upCost)}</button></section>
  <section class="dcard"><h3>Daily bonus</h3><p class="stat">${ORRA}${fmt(c.gift)}</p><p class="note">${c.today ? `Collected. Streak: day ${c.day}. Come back tomorrow for more.` : `Streak day ${c.day}. Each day in a row adds 25, up to day 7.`}</p>
   <button class="btn go" id="w3" ${c.today ? 'disabled' : ''}>${c.today ? 'Collected today' : 'Collect ' + fmt(c.gift)}</button></section>
- <section class="dcard"><h3>Level ${me.lvl}</h3><p class="stat">${fmt(me.limit)}<small>max bet per round</small></p><div class="meter"><i style="width:${pct(me.xp, me.need)}"></i></div>
+ <section class="dcard"><h3>Level ${me.lvl}</h3><p class="stat">${nolim ? 'No limit' : fmt(me.limit)}<small>max bet per round</small></p><div class="meter"><i style="width:${pct(me.xp, me.need)}"></i></div>
   <p class="note">${fmt(me.need - me.xp)} XP to level ${me.lvl + 1}. Every 5 Orra you bet gives 1 XP.</p></section>
  <section class="dcard"><h3>Inventory</h3><div class="inv"><div><b>${me.items.shield || 0}</b><small>Shield</small></div><div><b>${me.items.swap || 0}</b><small>Swap token</small></div></div>
   <p class="note">A Shield blocks the next attack on you in any bonus game. Swap tokens force a rival to switch sides.</p></section></div>`;
@@ -392,8 +439,9 @@ const RH = (() => {
   }
   function rulesDialog() {
     let h = `<section class="rsec"><h3>The table</h3><ul>
-<li>Every round you have 8 seconds to bet. When everyone presses Ready, the wheel spins at once.</li>
+<li>Every round you have ${S && S.cfg ? S.cfg.bet : 8} seconds to bet. When everyone presses Ready, the wheel spins at once.</li>
 <li>Pick a chip, then click a field. Click again to stack more. Right-click a field to remove your bet.</li>
+<li>The chip stack badge between each group of 4 tickets bets your chip on all 4 at once. Click it again to stack more.</li>
 <li>Your balance is in Orra ${ORRA}. Your level sets the maximum bet per round.</li>
 <li>Prime Minute: each round one field gets a x2, x3 or x5 boost on its winnings.</li></ul>
 <div class="pays">${KEYS.map(k => { const t = TYPES[k]; return `<div style="--c:${SKIN[k].f}">${t.n}<small>${t.pay ? 'pays ' + t.pay + ' : 1' : 'Bonus game'}</small></div>`; }).join('')}</div></section>
@@ -432,11 +480,15 @@ const RH = (() => {
     if (pendingRepeat && betting && tot > 0) { pendingRepeat = false; sfx('token_place'); }
     myTot = betting ? tot : 0;
     document.body.classList.toggle('spinning', m.phase === 'spinning');
+    Object.keys(GROUPS).forEach(g => $('g-' + g).disabled = !betting || ready);
     KEYS.forEach(k => {
       const h = $('h-' + k); h.disabled = !betting || ready;
       h.classList.toggle('lit', !!mine[k]);
       h.querySelector('.stake').innerHTML = mine[k] ? stackHtml(mine[k]) + `<b>${ORRA}${fmt(mine[k])}</b>` : '';
-      h.querySelector('.dots').innerHTML = m.players.filter(p => p.id !== m.you && p.bets[k]).map(p => `<i style="--c:${p.color}" title="${esc(p.name)}: ${p.bets[k]}"></i>`).join('');
+      // Other players' bets: their colour token, first 2 letters of their name and the amount, sized down as more players join in.
+      const others = m.players.filter(p => p.id !== m.you && p.bets[k]), dots = h.querySelector('.dots');
+      dots.style.setProperty('--n', others.length);
+      dots.innerHTML = others.map(p => `<i style="--c:${p.color}" title="${esc(p.name)}: ${fmt(p.bets[k])} Orra"><span class="tkn"></span><b>${esc(initials(p.name))}</b><small>${short(p.bets[k])}</small></i>`).join('');
       const b = h.querySelector('.boost'); if (b) b.remove();
       if (m.boost && m.boost.k === k) h.insertAdjacentHTML('beforeend', `<span class="boost">x${m.boost.m}</span>`);
       h.classList.toggle('hit', m.phase !== 'betting' && m.phase !== 'spinning' && m.landed === k);

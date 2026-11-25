@@ -1,4 +1,4 @@
-// Rare Hours game core: profiles, economy, lobbies, wheel, bonus host.
+// Gekke Tijd game core: profiles, economy, lobbies, wheel, bonus host.
 // Transport agnostic. Used by server.js (Node, WebSocket) and by the browser host (GitHub Pages, WebRTC).
 // A conn is any object with { open: boolean, send(obj) }.
 (function (root, factory) {
@@ -21,6 +21,7 @@ function profile(token, name) {
   if (!p) p = db.profiles[token] = { name, bal: 500, xp: 0, lvl: 1, work: 1, claim: Date.now(), day: '', streak: 0, items: { swap: 0, shield: 0 } };
   if (name) p.name = name;
   p.items = p.items || { swap: 0, shield: 0 };
+  p.won = p.won || 0; p.lost = p.lost || 0;   // lifetime: profit from winning bets, stakes lost
   saveSoon();
   return p;
 }
@@ -28,7 +29,8 @@ const CHIPS = [5, 10, 25, 100, 500];
 const limit = p => 200 * p.lvl, need = p => 200 * p.lvl, rate = p => 10 * p.work, cap = p => 100 * p.work, upCost = p => 400 * p.work * p.work;
 const pending = p => Math.max(0, Math.min(cap(p), Math.floor((Date.now() - p.claim) / 60000 * rate(p))));
 const dayKey = (t = Date.now()) => { const d = new Date(t); return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); };
-function gainXp(p, stake) { p.xp += stake / 5; let got = 0; while (p.xp >= need(p)) { p.xp -= need(p); p.lvl++; got += 25 * (p.lvl - 1); } p.bal += got; return got; }
+// Returns the level-up reward; the room pays it into the right balance (wallet or run balance).
+function gainXp(p, stake) { p.xp += stake / 5; let got = 0; while (p.xp >= need(p)) { p.xp -= need(p); p.lvl++; got += 25 * (p.lvl - 1); } return got; }
 
 
 // ---------------------------------------------------------------- Rooms
@@ -38,7 +40,24 @@ const CODE_OK = /^[A-Z0-9]{4}$/;
 function genCode() { let c; do { c = ''; for (let i = 0; i < 4; i++) c += CODE_CH[Math.floor(Math.random() * CODE_CH.length)]; } while (rooms.has(c)); return c; }
 const COLORS = ['#e8443a', '#3a8ee8', '#3ac46e', '#e8b23a', '#b45ae8', '#3ad6d6', '#e85aa8', '#a8d63a'];
 const MAX_PLAYERS = 8;
-const BET_MS = 8000;
+// Run settings, chosen by the lobby creator. Every value is checked against these lists.
+const RUN_OPTS = {
+  start: [0, 500, 1000, 2500, 5000, 10000],   // 0: everyone plays with their own wallet
+  bet: [5, 8, 12, 15, 20, 30],                // betting time, seconds
+  spin: ['short', 'normal', 'long'],          // wheel spin time
+  limit: ['level', 'none'],                   // max bet per round
+  late: ['on', 'off'],                        // late buy-ins for bonus games
+  boost: ['on', 'off'],                       // Prime Minute
+  max: [2, 3, 4, 5, 6, 7, 8]                  // max players
+};
+const RUN_DEFAULT = { start: 0, bet: 8, spin: 'normal', limit: 'level', late: 'on', boost: 'on', max: 8 };
+const SPIN_MS = { short: [2000, 4000], normal: [3000, 7000], long: [6000, 10000] };
+const NO_LIMIT = 1e9;
+function runCfg(c) {
+  const out = { ...RUN_DEFAULT };
+  if (c && typeof c === 'object') for (const k of Object.keys(RUN_OPTS)) if (RUN_OPTS[k].includes(c[k])) out[k] = c[k];
+  return out;
+}
 // Buy-in window: when the wheel lands on a bonus field, players who did not back it can buy in late.
 // Backers keep the edge: full multiplier, Prime Minute boost, an Edge Shield and the first turns.
 const JOIN_MS = 7000, INTRO_MS = 2800, LATE_PAY = 0.6;
@@ -48,21 +67,34 @@ const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.f
 const round2 = x => Math.round(x * 100) / 100;
 
 class Room {
-  constructor(code) {
-    this.code = code; this.players = new Map(); this.phase = 'betting'; this.ends = 0; this.bets = {}; this.ready = new Set();
+  constructor(code, cfg) {
+    this.cfg = runCfg(cfg); this.code = code; this.players = new Map(); this.phase = 'betting'; this.ends = 0; this.bets = {}; this.ready = new Set();
     this.boost = null; this.hist = []; this.dry = 0; this.spin = null; this.bonus = null; this.msg = ''; this.timer = null;
     this.last = {}; this.results = null; this.late = new Set(); this.passed = new Set(); this.spent = {}; this.round = 0; this.force = null; this.idle = null;
   }
   get online() { return [...this.players.values()].filter(p => p.conn && p.conn.open); }
+  // A fixed starting balance gives every player a run balance for this lobby only; otherwise the wallet is used.
+  bal(p) { return this.cfg.start ? p.run : p.prof.bal; }
+  add(p, d) { if (this.cfg.start) p.run += d; else p.prof.bal += d; }
+  limit(pr) { return this.cfg.limit === 'none' ? NO_LIMIT : limit(pr); }
+  // Lifetime stats: won is the profit on the field that hit, lost is every stake on other fields.
+  tally(key, wins) {
+    for (const [pid, b] of Object.entries(this.stakes || {})) {
+      const p = this.players.get(pid); if (!p) continue;
+      const spent = Object.values(b).reduce((a, x) => a + x, 0), stake = b[key] || 0, win = wins[pid] || 0;
+      p.prof.won += Math.max(0, win - stake); p.prof.lost += spent - stake;
+    }
+  }
   join(conn, token, name) {
     const pid = hash(token);
     let p = this.players.get(pid);
     if (!p) {
-      if (this.players.size >= MAX_PLAYERS) return null;
+      if (this.players.size >= this.cfg.max) return null;
       const used = new Set([...this.players.values()].map(x => x.color));
       p = { id: pid, token, color: COLORS.find(c => !used.has(c)) || COLORS[0] };
       this.players.set(pid, p);
     }
+    if (this.cfg.start && p.run == null) p.run = this.cfg.start;
     p.conn = conn; p.prof = profile(token, name); p.name = p.prof.name;
     conn.send({ t: 'catalog', games: Object.fromEntries(Object.entries(GAMES).map(([k, a]) => [k, a.map(g => ({ id: g.id, name: g.name, rules: g.rules }))])) });
     clearTimeout(this.idle); this.idle = null;
@@ -86,9 +118,9 @@ class Room {
     if (!this.online.length) { this.timer = null; this.phase = 'betting'; return; }   // paused until someone is back
     this.phase = 'betting'; this.round++; this.bets = {}; this.ready.clear(); this.spin = null;
     const r = Math.random();
-    this.boost = { k: RHS.KEYS[Math.floor(Math.random() * 8)], m: r < 0.7 ? 2 : r < 0.95 ? 3 : 5 };
-    this.msg = `Prime Minute: ${TYPES[this.boost.k].n} is boosted x${this.boost.m}`;
-    this.after(BET_MS, () => this.closeBets());
+    this.boost = this.cfg.boost === 'on' ? { k: RHS.KEYS[Math.floor(Math.random() * 8)], m: r < 0.7 ? 2 : r < 0.95 ? 3 : 5 } : null;
+    this.msg = this.boost ? `Prime Minute: ${TYPES[this.boost.k].n} is boosted x${this.boost.m}` : 'Place your bets';
+    this.after(this.cfg.bet * 1000, () => this.closeBets());
     this.broadcast();
   }
   checkReady() {
@@ -102,12 +134,12 @@ class Room {
     for (const p of this.players.values()) {
       const b = this.bets[p.id]; if (!b) continue;
       const tot = Object.values(b).reduce((a, x) => a + x, 0);
-      if (!tot || tot > p.prof.bal || tot > limit(p.prof)) continue;
-      p.prof.bal -= tot; p.levelUp = gainXp(p.prof, tot); this.spent[p.id] = tot;
+      if (!tot || tot > this.bal(p) || tot > this.limit(p.prof)) continue;
+      this.add(p, -tot); p.levelUp = gainXp(p.prof, tot); this.add(p, p.levelUp); this.spent[p.id] = tot;
       this.stakes[p.id] = { ...b }; this.last[p.id] = { ...b };
     }
     saveSoon();
-    const idx = this.pickIndex(), dur = 3000 + Math.floor(Math.random() * 4001);   // 3 to 7 seconds
+    const [lo, hi] = SPIN_MS[this.cfg.spin], idx = this.pickIndex(), dur = lo + Math.floor(Math.random() * (hi - lo + 1));
     this.spin = { idx, dur, at: Date.now(), turns: 3 + Math.floor(dur / 1600) };
     this.phase = 'spinning'; this.msg = 'No more bets';
     this.after(dur, () => this.landed());
@@ -136,13 +168,14 @@ class Room {
     }
     const ids = Object.keys(this.stakes).filter(pid => this.stakes[pid][key] > 0 && this.players.has(pid));
     if (!ids.length) {
+      this.tally(key, {}); saveSoon();
       this.msg = `${t.n}. Nobody bet on it.`; this.results = { key, rows: [] };
       this.after(2500, () => this.startBetting()); this.broadcast(); return;
     }
     let pool = GAMES[key], g = pool[Math.floor(Math.random() * pool.length)];
     if (this.force && this.force.game && GAME_BY_ID[this.force.game]) g = GAME_BY_ID[this.force.game];
     this.force = null;
-    const on = this.online.filter(p => !ids.includes(p.id));
+    const on = this.cfg.late === 'on' ? this.online.filter(p => !ids.includes(p.id)) : [];
     const top = Math.max(...ids.map(pid => this.stakes[pid][key])), share = lateShare(ids.length, ids.length + on.length);
     this.msg = `${t.n}: ${g.name}`;
     this.phase = 'intro'; this.nextGame = { id: g.id, name: g.name, cat: key, rules: g.rules, top, share, backers: ids };
@@ -153,7 +186,7 @@ class Room {
   }
   // res: { pid: multiplier }. Pays stake * (m * boost + 1), as in the base game.
   pay(key, res) {
-    const rows = [];
+    const rows = [], wins = {};
     for (const [pid, b] of Object.entries(this.stakes)) {
       const p = this.players.get(pid); if (!p) continue;
       const stake = b[key] || 0;
@@ -162,10 +195,11 @@ class Room {
       if (late) m = round2(m * LATE_PAY);
       else if (stake && this.boost && this.boost.k === key) m = round2(m * this.boost.m);
       const win = stake ? Math.round(stake * (m + 1)) : 0;
-      p.prof.bal += win;
+      this.add(p, win); wins[pid] = win;
       rows.push({ id: pid, late, m, stake, win, spent: Object.values(b).reduce((a, x) => a + x, 0), lvl: p.levelUp || 0 });
       p.levelUp = 0;
     }
+    this.tally(key, wins);
     rows.sort((a, b) => b.win - a.win);
     this.results = { key, rows };
     this.phase = 'payout'; saveSoon();
@@ -176,8 +210,8 @@ class Room {
   // Most a non-backer may buy in for: a share of the top stake, within balance and the level limit left this round.
   lateCap(p) {
     const n = this.nextGame;
-    if (this.phase !== 'intro' || !n || n.backers.includes(p.id) || this.late.has(p.id) || this.passed.has(p.id)) return 0;
-    const c = Math.min(Math.max(5, Math.floor(n.top * n.share / 5) * 5), p.prof.bal, limit(p.prof) - (this.spent[p.id] || 0));   // never below one 5 chip
+    if (this.phase !== 'intro' || !n || this.cfg.late !== 'on' || n.backers.includes(p.id) || this.late.has(p.id) || this.passed.has(p.id)) return 0;
+    const c = Math.min(Math.max(5, Math.floor(n.top * n.share / 5) * 5), this.bal(p), this.limit(p.prof) - (this.spent[p.id] || 0));   // never below one 5 chip
     return Math.max(0, c >= 5 ? Math.floor(c / 5) * 5 : 0);
   }
 
@@ -208,7 +242,7 @@ class Room {
       name: pid => (P(pid) ? P(pid).name : 'House'),
       color: pid => (P(pid) ? P(pid).color : '#888'),
       online: pid => !!(P(pid) && P(pid).conn && P(pid).conn.open),
-      balance: pid => (P(pid) ? P(pid).prof.bal : 0),
+      balance: pid => (P(pid) ? room.bal(P(pid)) : 0),
       stake: stakeOf,
       backer: pid => ids.includes(pid) && !room.late.has(pid),
       late: pid => room.late.has(pid),
@@ -266,20 +300,23 @@ class Room {
   // ---- Client messages ----
   handle(p, m) {
     const pr = p.prof;
-    if (m.t === 'bet' || m.t === 'unbet' || m.t === 'clear' || m.t === 'repeat') {
+    if (m.t === 'bet' || m.t === 'bets' || m.t === 'unbet' || m.t === 'clear' || m.t === 'repeat') {
       if (this.phase !== 'betting' || this.ready.has(p.id)) return;
       const b = this.bets[p.id] = this.bets[p.id] || {};
       const tot = () => Object.values(b).reduce((a, x) => a + x, 0);
-      if (m.t === 'bet') {
-        if (!TYPES[m.key] || !CHIPS.includes(m.amt)) return;
-        if (pr.bal - tot() < m.amt) return p.conn.send({ t: 'err', msg: 'Not enough Orra. Visit the Cashier.' });
-        if (tot() + m.amt > limit(pr)) return p.conn.send({ t: 'err', msg: `Level ${pr.lvl}: maximum ${limit(pr)} Orra per round.` });
-        b[m.key] = (b[m.key] || 0) + m.amt;
+      if (m.t === 'bet' || m.t === 'bets') {
+        // 'bets' places the same chip on a whole group of fields at once (the badge between 4 tickets).
+        const keys = m.t === 'bet' ? [m.key] : Array.isArray(m.keys) ? [...new Set(m.keys)].slice(0, 4) : [];
+        if (!keys.length || !keys.every(k => TYPES[k]) || !CHIPS.includes(m.amt)) return;
+        const amt = m.amt * keys.length;
+        if (this.bal(p) - tot() < amt) return p.conn.send({ t: 'err', msg: this.cfg.start ? 'Not enough Orra left in this run.' : 'Not enough Orra. Visit the Cashier.' });
+        if (tot() + amt > this.limit(pr)) return p.conn.send({ t: 'err', msg: `Level ${pr.lvl}: maximum ${limit(pr)} Orra per round.` });
+        for (const k of keys) b[k] = (b[k] || 0) + m.amt;
       } else if (m.t === 'unbet') delete b[m.key];
       else if (m.t === 'clear') this.bets[p.id] = {};
       else if (m.t === 'repeat') {
         const l = this.last[p.id] || {}, s = Object.values(l).reduce((a, x) => a + x, 0);
-        if (!s) return; if (s > pr.bal || s > limit(pr)) return p.conn.send({ t: 'err', msg: 'Not enough Orra to repeat.' });
+        if (!s) return; if (s > this.bal(p) || s > this.limit(pr)) return p.conn.send({ t: 'err', msg: 'Not enough Orra to repeat.' });
         this.bets[p.id] = { ...l };
       }
       return this.broadcast();
@@ -295,7 +332,7 @@ class Room {
       if (!(amt >= 5)) return;
       if (amt > cap) return p.conn.send({ t: 'err', msg: `You can buy in for at most ${cap} Orra.` });
       const key = this.nextGame.cat;
-      pr.bal -= amt; p.levelUp = (p.levelUp || 0) + gainXp(pr, amt);
+      this.add(p, -amt); const up = gainXp(pr, amt); this.add(p, up); p.levelUp = (p.levelUp || 0) + up;
       this.spent[p.id] = (this.spent[p.id] || 0) + amt;
       this.stakes[p.id] = { ...(this.stakes[p.id] || {}), [key]: amt };
       this.late.add(p.id); saveSoon();
@@ -306,6 +343,7 @@ class Room {
       return;
     }
     if (m.t === 'cashier') {
+      if (this.cfg.start) return;   // fixed balance runs: the Cashier is closed
       const tot = Object.values(this.bets[p.id] || {}).reduce((a, x) => a + x, 0);
       if (m.op === 'collect') { pr.bal += pending(pr); pr.claim = Date.now(); }
       if (m.op === 'upgrade' && pr.work < 10 && pr.bal - tot >= upCost(pr)) { const pd = pending(pr); pr.bal += pd - upCost(pr); pr.claim = Date.now(); pr.work++; }
@@ -319,17 +357,17 @@ class Room {
     const me = this.players.get(pid), pr = me.prof;
     const today = pr.day === dayKey(), next = pr.day === dayKey(Date.now() - 864e5) ? pr.streak + 1 : 1;
     return {
-      t: 'room', code: this.code, you: pid, dev: DEV, prof: pr, phase: this.phase, ends: this.ends, now: Date.now(), round: this.round,
+      t: 'room', code: this.code, cfg: this.cfg, you: pid, dev: DEV, prof: pr, phase: this.phase, ends: this.ends, now: Date.now(), round: this.round,
       boost: this.boost, hist: this.hist, msg: this.msg, spin: this.spin, landed: this.phase === 'betting' ? null : this.landedKey,
       next: this.phase === 'intro' ? { ...this.nextGame, cap: this.lateCap(me), passed: this.passed.has(pid), late: [...this.late], latePay: LATE_PAY } : null, results: this.phase === 'payout' || this.phase === 'landed' ? this.results : null,
       players: [...this.players.values()].map(p => ({
-        id: p.id, name: p.name, color: p.color, online: !!(p.conn && p.conn.open), bal: p.prof.bal, lvl: p.prof.lvl,
+        id: p.id, name: p.name, color: p.color, online: !!(p.conn && p.conn.open), bal: this.bal(p), lvl: p.prof.lvl,
         bets: this.phase === 'betting' ? (this.bets[p.id] || {}) : ((this.stakes || {})[p.id] || {}),
         ready: this.ready.has(p.id), shield: p.prof.items.shield, swap: p.prof.items.swap
       })),
       me: {
-        bal: pr.bal, lvl: pr.lvl, xp: Math.floor(pr.xp), need: need(pr), limit: limit(pr), items: pr.items, hasLast: !!Object.keys(this.last[pid] || {}).length,
-        cashier: { rate: rate(pr), cap: cap(pr), pending: pending(pr), work: pr.work, upCost: upCost(pr), today, day: today ? pr.streak : next, gift: 100 + 25 * Math.min(next - 1, 6) }
+        bal: this.bal(me), lvl: pr.lvl, xp: Math.floor(pr.xp), need: need(pr), limit: this.limit(pr), won: pr.won, lost: pr.lost, items: pr.items, hasLast: !!Object.keys(this.last[pid] || {}).length,
+        cashier: { closed: !!this.cfg.start, rate: rate(pr), cap: cap(pr), pending: pending(pr), work: pr.work, upCost: upCost(pr), today, day: today ? pr.streak : next, gift: 100 + 25 * Math.min(next - 1, 6) }
       }
     };
   }
@@ -337,5 +375,5 @@ class Room {
 }
 
 
-return { rooms, Room, genCode, profile, GAMES, CODE_OK, MAX_PLAYERS };
+return { rooms, Room, genCode, profile, GAMES, CODE_OK, MAX_PLAYERS, RUN_OPTS, RUN_DEFAULT, runCfg };
 });

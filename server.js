@@ -1,5 +1,5 @@
 'use strict';
-// Rare Hours multiplayer server. No dependencies: node server.js
+// Gekke Tijd multiplayer server. No dependencies: node server.js
 const http = require('http'), fs = require('fs'), path = require('path'), crypto = require('crypto');
 const RHS = require('./public/shared.js');
 const { TYPES, DIAL, BONUS_KEYS, BORING } = RHS;
@@ -92,7 +92,7 @@ server.on('upgrade', (req, sock) => {
       token = String(m.token || '').slice(0, 64) || crypto.randomBytes(12).toString('hex');
       name = String(m.name || 'Player').replace(/[<>&"]/g, '').trim().slice(0, 16) || 'Player';
       const pr = profile(token, name);
-      return c.send({ t: 'hello', token, name, bal: pr.bal });
+      return c.send({ t: 'hello', token, name, bal: pr.bal, won: pr.won, lost: pr.lost });
     }
     if (!token) return;
     if (m.t === 'create' || m.t === 'join') {
@@ -103,7 +103,7 @@ server.on('upgrade', (req, sock) => {
           if (!CODE_OK.test(code)) return c.send({ t: 'err', msg: 'A custom code must be exactly 4 letters or digits.' });
           if (rooms.has(code)) return c.send({ t: 'err', msg: `Code ${code} is already in use. Pick another.` });
         } else code = genCode();
-        rooms.set(code, new Room(code));
+        rooms.set(code, new Room(code, m.cfg));
       } else if (!rooms.has(code)) return c.send({ t: 'err', msg: `No lobby with code ${code || '?'}.` });
       const r = rooms.get(code), p = r.join(c, token, name);
       if (!p) { if (!r.players.size) rooms.delete(code); return c.send({ t: 'err', msg: 'That lobby is full (8 players).' }); }
@@ -113,5 +113,5 @@ server.on('upgrade', (req, sock) => {
   };
   c.onclose = () => { if (room && me && me.conn === c) { me.conn = null; room.left(); } };
 });
-server.listen(PORT, () => console.log(`Rare Hours running on http://localhost:${PORT}${DEV ? ' (DEV: forced spins enabled)' : ''}`));
+server.listen(PORT, () => console.log(`Gekke Tijd running on http://localhost:${PORT}${DEV ? ' (DEV: forced spins enabled)' : ''}`));
 module.exports = { server, rooms };
