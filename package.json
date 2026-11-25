@@ -1,0 +1,9 @@
+{
+  "name": "rare-hours",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Multiplayer wheel game with 16 minigames, play money only",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=18" }
+}
