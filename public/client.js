@@ -147,14 +147,17 @@ const RH = (() => {
   }
   // Server dictates the landing field and the duration (3 to 7 s); we animate toward it.
   let spinKey = null, spinRaf = 0;
+  const zoom = z => { if (!CALM) $('stage').dataset.zoom = z; };
   function spinTo(sp) {
     cancelAnimationFrame(spinRaf); hitSeg = -1;
     const from = angle, target = -(sp.idx + (Math.random() - .5) * .7) * TAU / N;
     const remain = Math.max(300, sp.dur - (now() - sp.at)), dist = ((target - from) % TAU + TAU) % TAU + (CALM ? 1 : sp.turns) * TAU;
-    const t0 = performance.now(); let seg = null;
+    const t0 = performance.now(); let seg = null, close = false;
+    zoom(1);
     const stepF = () => {
       const p = Math.min(1, (performance.now() - t0) / remain); angle = from + dist * (1 - Math.pow(1 - p, 3.4));
       const s = Math.floor(angle / (TAU / N) + .5); flap *= .8; if (seg !== null && s !== seg) { flap = .45; tone(850, .03, .03); } seg = s; blink = Math.floor(p * 40);
+      if (!close && remain - (performance.now() - t0) <= Math.max(1300, remain * .45)) { close = true; zoom(2); }
       if (p >= 1) { flap = 0; angle %= TAU; hitSeg = sp.idx; draw(); return; }
       draw(); spinRaf = requestAnimationFrame(stepF);
     };
@@ -278,6 +281,7 @@ const RH = (() => {
     document.querySelectorAll('.coin').forEach(b => { b.disabled = !betting || ready; b.classList.toggle('short', betting && +b.dataset.v > m.me.bal - tot); });
     // spin
     if (m.phase === 'spinning' && m.spin && spinKey !== m.spin.at) { spinKey = m.spin.at; spinTo(m.spin); }
+    if (m.phase === 'betting' || m.phase === 'intro' || m.phase === 'bonus') zoom(0);
     if (m.phase === 'betting' && lastPhase !== 'betting') { hitSeg = -1; draw(); document.body.classList.remove('won'); $('win').textContent = '0'; $('win').parentNode.classList.remove('up'); }
     // history
     $('hist').innerHTML = m.hist.slice(0, 10).map(k => { const t = TYPES[k]; return `<span style="background:${t.c};color:${t.t}" title="${t.n}">${t.pay ? t.n : t.n.split(' ').map(w => w[0]).join('')}</span>`; }).join('');
