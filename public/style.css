@@ -77,8 +77,11 @@ header{display:flex;justify-content:space-between;align-items:center;gap:10px;pa
 .tag.ok{background:#1f6b44;color:#e6ffef}
 
 main{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end}
-#stage{width:clamp(240px,calc(100vh - 420px),min(94vw,600px));margin:auto 0 0}
-#wheel{width:100%;display:block}
+#stage{width:clamp(240px,calc(100vh - 420px),min(94vw,600px));margin:auto 0 0;position:relative;clip-path:inset(0 -100vw 0 -100vw)}
+/* Camera: zoom 1 = slight zoom when the spin starts, zoom 2 = top half of the wheel (around the pointer) near the end */
+#wheel{width:100%;display:block;transform-origin:50% 3.7%;transition:transform .8s cubic-bezier(.45,0,.2,1);will-change:transform}
+#stage[data-zoom="1"] #wheel{transform:scale(1.18);transition-duration:.9s}
+#stage[data-zoom="2"] #wheel{transform:scale(1.95);transition-duration:1.3s}
 #say{min-height:42px;max-width:94vw;padding:10px 26px;background:linear-gradient(#24130c,#140a07);border-radius:var(--r);box-shadow:inset 0 0 0 1px var(--copper),0 8px 24px #000a;font-weight:700;font-size:16px;text-align:center;z-index:1;transition:background .3s,color .3s}
 #say.pop{animation:pop .35s var(--ease)}
 .won #say{background:var(--metal);color:#1c0f0a;box-shadow:inset 0 0 0 1px var(--goldhi),0 0 30px #e6c67399}
