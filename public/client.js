@@ -335,19 +335,29 @@ const RH = (() => {
     c.setTransform(1, 0, 0, 1, 0, 0);
   }
   // Server dictates the landing field and the duration (3 to 7 s); we animate toward it.
-  let spinKey = null, spinRaf = 0;
+  // The Glove (glove.js) grabs the wheel first: it may ask for a short delay and sets the spin force (turns and curve).
+  let spinKey = null, spinRaf = 0, spinWait = 0, spinLive = false;
   const zoom = z => { if (!CALM) $('stage').dataset.zoom = z; };
+  const G_ = window.Glove || null;
+  const wheelInfo = () => { const r = $('wheel').getBoundingClientRect(); if (!r.width) return null; const s = r.width / W; return { x: r.left + CX * s, y: r.top + CY * s, r: R * s, a: angle }; };
+  const wheelNudge = da => { if (spinLive || !face) return; angle += da; draw(); };
   function spinTo(sp) {
-    cancelAnimationFrame(spinRaf); hitSeg = -1;
+    cancelAnimationFrame(spinRaf); clearTimeout(spinWait); hitSeg = -1;
+    const plan = G_ ? G_.spin(sp, Math.max(0, sp.dur - (now() - sp.at))) : null;
+    spinWait = setTimeout(() => spinRun(sp, plan), plan ? plan.delay : 0);
+  }
+  function spinRun(sp, plan) {
     const from = angle, target = -(sp.idx + (Math.random() - .5) * .7) * TAU / N;
-    const remain = Math.max(300, sp.dur - (now() - sp.at)), dist = ((target - from) % TAU + TAU) % TAU + (CALM ? 1 : sp.turns) * TAU;
+    const remain = Math.max(300, sp.dur - (now() - sp.at)), shape = plan ? plan.shape(remain) : { turns: null, e: 3.4, pa: 0 };
+    const turns = CALM ? 1 : shape.turns || sp.turns, curve = G_ ? G_.spinCurve(shape) : p => 1 - Math.pow(1 - p, 3.4);
+    const dist = ((target - from) % TAU + TAU) % TAU + turns * TAU;
     const t0 = performance.now(); let seg = null, close = false;
-    zoom(1);
+    spinLive = true; zoom(1); if (G_) G_.spinGo({ remain });
     const stepF = () => {
-      const p = Math.min(1, (performance.now() - t0) / remain); angle = from + dist * (1 - Math.pow(1 - p, 3.4));
+      const p = Math.min(1, (performance.now() - t0) / remain); angle = from + dist * curve(p);
       const s = Math.floor(angle / (TAU / N) + .5); flap *= .8; if (seg !== null && s !== seg) { flap = .26; tone(850, .03, .03); } seg = s; blink = Math.floor(p * 40);
       if (!close && remain - (performance.now() - t0) <= Math.max(1300, remain * .45)) { close = true; zoom(2); }
-      if (p >= 1) { flap = 0; angle %= TAU; hitSeg = sp.idx; draw(); return; }
+      if (p >= 1) { flap = 0; angle %= TAU; hitSeg = sp.idx; spinLive = false; draw(); return; }
       draw(); spinRaf = requestAnimationFrame(stepF);
     };
     spinRaf = requestAnimationFrame(stepF);
@@ -355,7 +365,7 @@ const RH = (() => {
 
   // ---- Table ----
   const GROUPS = { num: KEYS.filter(k => TYPES[k].pay), bonus: BONUS_KEYS };
-  let chip = 5, myTot = 0, pendingRepeat = false, lastPhase = null, lastRound = -1, lastWinShown = null;
+  let chip = 5, myTot = 0, pendingRepeat = false, lastPhase = null, lastRound = -1, lastWinShown = null, players0 = {}, gloveKey = '';
   function setupTable() {
     cx = $('wheel').getContext('2d');
     // Desk: raffle tickets, numbers left and bonuses right, each 2x2 group with a chip stack badge in the middle
@@ -375,7 +385,7 @@ const RH = (() => {
     $('clear').onclick = () => send({ t: 'clear' });
     $('again').onclick = () => { pendingRepeat = true; send({ t: 'repeat' }); };
     loadSfx('token_place'); loadSfx('no_tokens_left');
-    $('go').onclick = () => { send({ t: 'ready' }); tone(660, .15); };
+    $('go').onclick = () => { send({ t: 'ready' }); tone(660, .15); if (G_) G_.emit('ready'); };
     $('help').onclick = () => { rulesDialog(); $('rules').showModal(); };
     $('shop').onclick = () => { shop(); $('work').showModal(); };
     const sndLabel = () => { $('snd').textContent = 'Sound ' + (sound ? 'on' : 'off'); $('snd').setAttribute('aria-pressed', sound); };
@@ -391,7 +401,7 @@ const RH = (() => {
   // Chips are the betting tokens. Check locally first so an impossible bet gets instant feedback.
   function canBet(n, el) {
     const me = S.me, avail = me.bal - myTot, need = chip * n;
-    const deny = t => { sfx('no_tokens_left'); toast(t, 2600, 'bad'); el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake'); return false; };
+    const deny = t => { sfx('no_tokens_left'); if (G_) G_.emit('refused'); toast(t, 2600, 'bad'); el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake'); return false; };
     if (avail < 5) return deny(S.me.cashier.closed ? 'No Orra left in this run.' : 'No Orra left. Collect more at the Cashier.');
     if (need > avail) return deny(n > 1 ? `All 4 needs ${fmt(need)} Orra. You have ${fmt(avail)}.` : `Only ${fmt(avail)} Orra left. Use a smaller chip.`);
     if (myTot + need > me.limit) return deny(`Level ${me.lvl} limit: ${fmt(me.limit)} Orra per round.`);
@@ -399,11 +409,11 @@ const RH = (() => {
   }
   function placeBet(k) {
     if (!S || !canBet(1, $('h-' + k))) return;
-    send({ t: 'bet', key: k, amt: chip }); sfx('token_place');
+    send({ t: 'bet', key: k, amt: chip }); sfx('token_place'); if (G_) G_.emit('bet', { el: $('h-' + k) });
   }
   function placeGroup(g) {
     if (!S || !canBet(4, $('g-' + g))) return;
-    send({ t: 'bets', keys: GROUPS[g], amt: chip }); sfx('token_place');
+    send({ t: 'bets', keys: GROUPS[g], amt: chip }); sfx('token_place'); if (G_) G_.emit('bet', { el: $('g-' + g) });
   }
   function renderChips() { document.querySelectorAll('.coin').forEach(b => { b.classList.toggle('on', +b.dataset.v === chip); b.setAttribute('aria-pressed', +b.dataset.v === chip); }); }
   function clockLoop() {
@@ -470,6 +480,12 @@ const RH = (() => {
       history.replaceState(null, '', location.pathname + '?join=' + m.code);
       try { sessionStorage.setItem('rh-room', m.code); } catch {}
       if (document.fonts) document.fonts.ready.then(() => { makeArt(); draw(); });
+      if (G_) G_.init({ wheel: wheelInfo, nudge: wheelNudge });
+    }
+    if (G_) {
+      G_.room({ phase: m.phase, round: m.round, left: m.phase === 'betting' && m.ends ? m.ends - now() : 0, allReady: m.phase === 'betting' && m.players.every(p => !p.online || p.ready) });
+      if (!first) { const was = Object.keys(players0), ids = m.players.filter(p => p.online).map(p => p.id); if (ids.some(i => !was.includes(i))) G_.emit('join'); else if (was.some(i => !ids.includes(i))) G_.emit('leave'); }
+      players0 = {}; m.players.forEach(p => { if (p.online) players0[p.id] = 1; });
     }
     const me = players[m.you], betting = m.phase === 'betting', ready = me.ready;
     $('room').textContent = m.code; $('lvl').innerHTML = `<b>Level ${m.me.lvl}<small>${fmt(m.me.xp)} / ${fmt(m.me.need)} XP</small></b><span class="meter"><i style="width:${Math.min(100, m.me.xp / m.me.need * 100)}%"></i></span>`;
@@ -519,7 +535,14 @@ const RH = (() => {
       const key2 = m.round + ':' + key;
       if (row && row.win > 0 && lastWinShown !== key2) { lastWinShown = key2; fanfare(); document.body.classList.add('won'); }
       if (BONUS_KEYS.includes(key)) Bonus.results(m);
+      if (G_ && gloveKey !== key2) {
+        gloveKey = key2;
+        G_.emit(BONUS_KEYS.includes(key) ? 'bonusResult' : 'payout', BONUS_KEYS.includes(key) ? { stake: row ? row.stake : 0, win: row ? row.win : 0, m: row ? row.m : 0 } : { stake: row ? row.spent : 0, win: row ? row.win : 0 });
+        if (row && row.lvl) G_.emit('levelUp');
+      }
     }
+    if (G_ && m.phase === 'intro' && lastPhase !== 'intro') G_.emit('landedBonus');
+    if (G_ && m.phase === 'landed' && lastPhase === 'spinning' && m.results && !m.results.rows.length) G_.emit('payout', { stake: 0, win: 0 });
     if (m.phase === 'landed' && lastPhase === 'spinning') tone(780, .5, .08);
     if (m.phase === 'betting' && lastRound !== m.round) { lastRound = m.round; tone(660, .4); }
     say(msg);
