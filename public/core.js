@@ -72,7 +72,7 @@ const round2 = x => Math.round(x * 100) / 100;
 //   eff     = k * ln(1 + profit / k), k = start / 4: big wins count less and less (diminishing returns)
 //   rate    = 5% + 2.5% * log2(1 + multiplier), at most 20%: higher multipliers save a bigger share
 //   cut     = eff * rate * (room left / run cap), so the share shrinks as the run cap fills up
-// Caps: per run 100 + 8% of the start (max 1000), per day 1500 across all runs.
+// Solo tables save half. Caps: per run 100 + 8% of the start (max 1000), per day 1500 across all runs.
 const VAULT_DAY = 1500;
 const vaultCap = start => Math.min(1000, Math.round(100 + start * 0.08));
 function vaultCut(start, profit, m, runGot, dayLeft) {
@@ -96,7 +96,8 @@ class Room {
   save(p, profit, m) {
     const pr = p.prof, today = dayKey();
     if (pr.vday !== today) { pr.vday = today; pr.vtoday = 0; }
-    const cut = vaultCut(this.cfg.start, profit, m, p.vault || 0, VAULT_DAY - pr.vtoday);
+    let cut = vaultCut(this.cfg.start, profit, m, p.vault || 0, VAULT_DAY - pr.vtoday);
+    if (this.online.length < 2) cut = Math.floor(cut / 2);   // solo tables save half
     if (cut > 0) { pr.bal += cut; pr.saved += cut; pr.vtoday += cut; p.vault = (p.vault || 0) + cut; }
     return cut;
   }
