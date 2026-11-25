@@ -863,14 +863,14 @@ const Glove = (() => {
       c.thumb([.5, 1.0, .6, .7], 320); c.hov(.2); await c.wait(260);                      // load the thumb under the index
       c.thumb([1.45, .05, -.1, 0], 1500); c.orient(null, null, rig.pitch.t - .2, 400);
       const tp = c.tip('thumb'), gr = S0 * 34, air = Math.min(rnd(.78, .92), Math.sqrt(8 * Math.max(S0, tp[1] - S0 * .5) / gr)); // never off the top
-      c.snd('glove-coin-flick', {}, tp[0]);                                                // cue 1: flick (t = 0)
+      c.snd('glove-coin-flick', { set: { metallic: 1.4 - st.agit, snappy: .4 + st.agit } }, tp[0]);                                                // cue 1: flick (t = 0)
       const coin = { t: 'coin', age: 0, x: tp[0], y: tp[1] - S0 * .1, vx: 0, vy: -gr * air / 2, g: gr, s: S0 * .16, spin: rnd(26, 34), life: air + .4 };
       parts.push(coin); fxDirty = true;
       await c.wait(160); c.pose('relax', 220); c.orient(null, null, rig.pitch.t + .2, 200);
       await c.go(rig.x.t, rig.y.t + S0 * .25, { dur: air * 1000 - 330, path: 'direct', ease: 'sine', bank: 0 });
       await c.go(rig.x.t, rig.y.t - S0 * .25, { dur: 150, path: 'direct', ease: 'out', bank: 0 });
       c.pose('fist', 900); coin.age = coin.life;                                           // the fist closes over the coin
-      c.snd('glove-coin-catch');                                                           // cue 2: catch (t = flight time, ~780 to 920 ms after cue 1)
+      c.snd('glove-coin-catch', { set: d.type === 'bet' ? { gloved: 2, leather: 1 } : { leather: 2, gloved: 1 }, vol: .85 + air * .2 });                                                           // cue 2: catch (t = flight time, ~780 to 920 ms after cue 1)
       c.scale(.93, 600); await bob(c, 1, S0 * .3, 110); c.scale(1, 160); c.hov(1);
       if (chance(.5)) { c.thumb([1.45, .05, -.05, 0], 300); await c.wait(450); } else await c.wait(350);
     },
@@ -879,7 +879,7 @@ const Glove = (() => {
       await show(c, { pose: 'bunch', which: 'tips', ang: -PI / 2 + rnd(-.2, .2), yaw: PI + rnd(-.35, .35), pitch: .35, z: .5, over: d.over });
       await c.wait(200);
       c.depth(.98, 120); c.scale(1.07, 260); await c.wait(300);
-      c.snd('glove-kiss');                                                                 // cue: the "mwah", fires as the hand pops open
+      c.snd('glove-kiss', { set: d.type === 'bigwin' ? { cartoon: 2, tactile: 1 } : d.type === 'bonusWin' ? { tactile: 2, cartoon: 1 } : { foley: 2, fast: 1, tactile: .5 }, vol: d.type === 'win' ? .9 : 1.05 });                                                                 // cue: the "mwah", fires as the hand pops open
       c.pose('splay', 1000); c.depth(.62, 160); c.scale(1, 200);
       const tp = c.tip('tips'); c.burst(tp[0], tp[1], 'snap', .8, false);
       await c.go(rig.x.t + sgn() * S0 * .7, rig.y.t - S0 * .6, { dur: 320, path: 'arc', ease: 'out' });
@@ -888,7 +888,7 @@ const Glove = (() => {
     // Rock on: horns up and four head bangs on a fixed 220 ms beat.
     async rockOn(c, d = {}) {
       await show(c, { pose: 'horns', which: 'middle', ang: -PI / 2 + rnd(-.2, .2), yaw: PI + rnd(-.3, .3), pitch: .1, z: .6, over: d.over, speed: 1200 });
-      c.snd('glove-rock', { hold: true });                                                 // cue: riff starts on the first bang, bangs every 220 ms
+      c.snd('glove-rock', { hold: true, set: d.type === 'levelUp' ? 'percussive' : d.type === 'bonusWin' ? { airguitar: 2, electric: 1 } : { electric: 3, percussive: 1 }, vol: .9 + st.agit * .25 });                                                 // cue: riff starts on the first bang, bangs every 220 ms
       const p0 = rig.pitch.t;
       for (let i = 0; i < 4; i++) {
         c.orient(null, null, p0 + .6, 700); c.depth(.78, 500); c.scale(1.05, 500); await c.wait(95);
@@ -899,7 +899,7 @@ const Glove = (() => {
     // Shaka / call me: thumb and pinky out, wrist rocks three times.
     async shaka(c, d = {}) {
       await show(c, { pose: 'shaka', which: 'mid', ang: -PI / 2 + rnd(-.2, .2), yaw: PI + rnd(-.3, .3), pitch: .1, z: .5, over: d.over });
-      c.snd('glove-shaka', { hold: true });                                                // cue: start of the rock, 6 swings of 170 ms
+      c.snd('glove-shaka', { hold: true, set: d.type === 'join' ? { breezy: 2, foley: 1 } : { surf: 2, breezy: 1 } });                                                // cue: start of the rock, 6 swings of 170 ms
       await rock(c, 3, rnd(.3, .38), 170, rig.roll.t); await c.wait(300);
     },
     // Table slam: fist raised high, hammered down on the table edge.
@@ -910,7 +910,7 @@ const Glove = (() => {
       await c.goPt('knuck', tx, ty - S0 * 2.8, { speed: 1000, z: .55, path: pathPick() });
       c.trem(.5); c.scale(1.06, 200); await c.wait(rnd(220, 340)); c.trem(0);
       await c.goPt('knuck', tx, ty, { dur: 115, path: 'direct', ease: 'in', k: 1300, damp: .7, bank: 0, z: .3 });
-      c.burst(tx, ty, 'impact', 1.35, 'glove-slam');                                       // cue: impact
+      c.burst(tx, ty, 'impact', 1.35, false); c.snd('glove-slam', { set: d.type === 'refused' ? { cartoon: 3, felt: 1 } : { felt: 3, cartoon: 1 }, vol: .9 + st.agit * .35, rate: 1.04 - st.agit * .08 }, tx);                                       // cue: impact
       c.scale(.9, 700);
       await c.goPt('knuck', tx, ty - S0 * .35, { dur: 140, path: 'direct', ease: 'out', k: 500, bank: 0, z: .3 });
       await c.goPt('knuck', tx, ty, { dur: 160, path: 'direct', ease: 'sine', k: 400, bank: 0, z: .3 });
@@ -923,7 +923,7 @@ const Glove = (() => {
       c.over(!!d.over); c.pose('flat', 140); c.aim('middle', dir > 0 ? 0 : PI, 0, -.95, 120);
       await c.goPt('palm', xa, y, { speed: 900, z: .2, path: pathPick() });
       await c.wait(160);
-      c.snd('glove-sweep', { hold: true }, (xa + xb) / 2);                                   // cue: swipe start, swipe lasts 520 ms
+      c.snd('glove-sweep', { hold: true, set: { felt: 1.5, wave: 1 }, vol: .8 + st.agit * .35, rate: clamp(1.1 - Math.abs(xb - xa) / Math.max(1, W) * .25, .92, 1.08) }, (xa + xb) / 2);                                   // cue: swipe start, swipe lasts 520 ms
       const sw = c.go(rig.x.t + (xb - xa), rig.y.t, { dur: 520, path: 'direct', ease: 'cubic', bank: 0, z: .2 });
       c.tween(520, () => { if (Math.random() < .45) { const tp = c.tip('tips'); burst(tp[0], tp[1] + S0 * .15, 'grab', .5, false); } }, E.lin).catch(() => {});
       await sw;
@@ -934,7 +934,7 @@ const Glove = (() => {
     // Hurry up: index up, twirling "wrap it up" circles, then a tap toward the clock.
     async hurry(c, d = {}) {
       await show(c, { pose: 'point', which: 'index', ang: -PI / 2, yaw: rnd(-.3, .3), pitch: .2, z: .5, over: d.over });
-      c.snd('glove-hurry', { hold: true });                                                // cue: 3 circles over 1050 ms
+      c.snd('glove-hurry', { hold: true, set: d.type === 'nobet' ? { cartoon: 3, airy: 1 } : { airy: 3, cartoon: 1 } });                                                // cue: 3 circles over 1050 ms
       const x = rig.x.t, y = rig.y.t, rr = S0 * .32;
       await c.tween(1050, u => { const a = u * TAU * 3; rig.x.t = x + Math.cos(a) * rr - rr; rig.y.t = y + Math.sin(a) * rr * .55; }, E.lin);
       await c.go(x, y, { dur: 160, path: 'direct' });
@@ -942,9 +942,10 @@ const Glove = (() => {
     },
     // Gun twirl and holster: optional finish after finger guns.
     async twirl(c) {
-      c.snd('glove-twirl');                                                                // cue 1: spin starts (2 turns in 520 ms)
+      const west = chance(.55);                                                            // matched pair: western spin + leather holster, or slick + cartoon
+      c.snd('glove-twirl', { set: west ? 'western' : 'slick' });                                                                // cue 1: spin starts (2 turns in 520 ms)
       const r0 = rig.roll.t; await c.tween(520, u => rig.roll.to(r0 + TAU * 2 * u, 900), E.out);
-      c.snd('glove-holster');                                                              // cue 2: holster drop (520 ms after cue 1)
+      c.snd('glove-holster', { set: west ? { leather: 3, cartoon: 1 } : { cartoon: 3, leather: 1 } });                                                              // cue 2: holster drop (520 ms after cue 1)
       await c.go(rig.x.t, rig.y.t + S0 * 1.3, { dur: 150, path: 'direct', ease: 'in', bank: 0 });
       await c.wait(260);
     },
@@ -1073,7 +1074,7 @@ const Glove = (() => {
     // Stretch: slow full splay with a wrist roll, release, then shake it out.
     async stretch(c) {
       await show(c, { pose: 'relax', which: 'middle', ang: -PI / 2 + rnd(-.2, .2), yaw: PI + rnd(-.25, .25), pitch: 0, z: .4, speed: 500 });
-      c.snd('glove-stretch', { hold: true });                                              // cue: one file, ~2.4 s: stretch 0 to 1.3 s, relax, shake out 1.8 to 2.4 s
+      c.snd('glove-stretch', { hold: true, set: { knuckle: 1.6 - st.agit, cartoon: .5 + st.agit } });                                              // cue: one file, ~2.4 s: stretch 0 to 1.3 s, relax, shake out 1.8 to 2.4 s
       const r0 = rig.roll.t, s = sgn(); c.pose('splay', 16); c.scale(1.1, 18); c.orient(r0 + s * .5, null, -.3, 14); c.trem(.25);
       await c.wait(1300); c.trem(0);
       c.pose('relax', 40); c.scale(1, 40); c.orient(r0, null, 0, 40); await c.wait(500);
@@ -1088,12 +1089,13 @@ const Glove = (() => {
       c.over(false); c.pose('legs', 100); c.orient(PI - dir * .12, rnd(-.25, .25), -.25, 80);   // upside down: fingers are the legs
       await c.goPt('middle', xa, y, { speed: 700, z: .2, path: pathPick() });
       c.hov(.1); c.breath(0);
+      const surf = any(['felt', 'felt', 'wood', 'pizzicato']);
       for (let i = 0; i < steps; i++) {
         const lift = i % 2, plant = 1 - lift;
         c.finger(lift, [.75, 1.0, .45], 700); c.finger(plant, [.08, .14, .08], 500);
         await c.go(rig.x.t + dir * stride, rig.y.t, { dur: 240, path: 'arc', bend: .25, side: -dir, ease: 'sine', bank: 0, z: .2 });
         c.finger(lift, [.12, .16, .1], 900);
-        const tp = c.tip(lift ? 'middle' : 'index'); c.snd('glove-step', { vol: .7 }, tp[0]); // cue: footfall every 240 ms
+        const tp = c.tip(lift ? 'middle' : 'index'); c.snd('glove-step', { set: chance(.7) ? surf : null, vol: (lift ? .62 : .74) * (i === steps - 1 ? 1.15 : 1), rate: lift ? 1.03 : .97 }, tp[0]); // cue: footfall every 240 ms
       }
       c.hov(1); c.breath(1); c.pose('relax', 80); await c.wait(rnd(200, 500));
     },
@@ -1314,7 +1316,7 @@ const Glove = (() => {
   }
   // Dizzy: after a monster spin the hand reels in shrinking circles, fingers limp, then shakes it off.
   async function dizzy(c) {
-    c.pose('limp', 60); c.snd('glove-dizzy', { hold: true });                             // cue: one file, ~1.9 s: wobble 0 to 1.5 s, shake off 1.5 to 1.86 s
+    c.pose('limp', 60); c.snd('glove-dizzy', { hold: true, set: { cartoon: 1 + (st.spinPlan ? st.spinPlan.k : 0), foley: 1 } });                             // cue: one file, ~1.9 s: wobble 0 to 1.5 s, shake off 1.5 to 1.86 s
     const x = clamp(rig.x.t, S0 * 2, W - S0 * 2), y = clamp(rig.y.t, S0 * 2, Hh - S0 * 2), r0 = rig.roll.t; c.trem(.15);
     await c.tween(1500, u => { const a = u * TAU * 2.5, rr = S0 * .55 * (1 - u * .6); rig.x.t = x + Math.cos(a) * rr; rig.y.t = y + Math.sin(a) * rr * .5; rig.roll.to(r0 + Math.sin(a) * .45, 120); }, E.sine);
     c.trem(0); c.pose('relax', 300);                                                       // (shake off, same file)
@@ -1358,9 +1360,10 @@ const Glove = (() => {
       const w = wheel(); if (!w) return;
       const s = sgn(); c.pose('cross', 140); c.orient(s * rnd(.1, .3), rnd(-.25, .25), .15, 70);
       await c.goPt('mid', w.x + s * w.r * rnd(1.1, 1.3), w.y - w.r * rnd(.35, .75), { speed: 700, z: .45, path: pathPick() });
-      c.snd('glove-cross', { hold: true, loop: true, vol: .7 });                           // cue: loop until the wheel lands
-      const y = rig.y.t, t0 = now();
-      await c.tween(1e5, () => { const k = clamp(1 - (st.spinEnd - now()) / 4000, 0, 1); rig.trem.to(.08 + k * .7, 40); rig.y.t = y + Math.sin((now() - t0) / 1000 * (5 + k * 6)) * S0 * .08; }, E.lin);
+      const pk = st.spinPlan ? st.spinPlan.k : .5;
+      const hum = c.snd('glove-cross', { hold: true, loop: true, vol: .7, set: pk > .6 ? { anticipation: 3, tenseshimmer: 1 } : pk < .3 ? { fidget: 3, tenseshimmer: 1 } : { tenseshimmer: 2, anticipation: 1, fidget: 1 } }); // cue: loop until the wheel lands
+      const y = rig.y.t, t0 = now(); let lastK = -1;
+      await c.tween(1e5, () => { const k = clamp(1 - (st.spinEnd - now()) / 4000, 0, 1); if (hum && k - lastK > .05) { lastK = k; hum.gain(.7 + k * .55, 200); } rig.trem.to(.08 + k * .7, 40); rig.y.t = y + Math.sin((now() - t0) / 1000 * (5 + k * 6)) * S0 * .08; }, E.lin);
     },
     async leanIn(c) {
       const w = wheel(); if (!w) return;
@@ -1400,7 +1403,7 @@ const Glove = (() => {
     if (cur && cur.pri > pri) { queue.push({ type, d, exp: now() + (pri >= 4 ? 6000 : 2500), pri }); return; }
     const name = pick('react:' + type, list.map(([n, w]) => [n, w * (CALM && /punch|jab|slam/i.test(n) ? 0 : 1)]));
     st.lastReact = now();
-    run(type + ':' + name, async c => { c.over(OVER.has(type)); await (R[name] || IDLE[name])(c, { ...d, over: OVER.has(type) }); c.over(false); }, pri, d);
+    run(type + ':' + name, async c => { c.over(OVER.has(type)); await (R[name] || IDLE[name])(c, { ...d, type, over: OVER.has(type) }); c.over(false); }, pri, d);
   }
   function director() {
     if (!started) return;

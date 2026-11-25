@@ -2,7 +2,7 @@
 // Sample sound effects. Files: sfx/<group>-<n>.mp3 (trimmed, de-clicked and loudness matched offline).
 // Every play picks a variant from a shuffle bag (all variants before a repeat, never the same one twice in a row),
 // with a small random pitch and level spread, optional soft attack, start offset, pan and fade out.
-// Page API: Sfx.play(group, opts) -> handle { stop(fadeMs), gain(v, ms) }, Sfx.preload(), Sfx.on (get/set), Sfx.ctx().
+// Page API: Sfx.play(group, opts) -> handle { stop(fadeMs), gain(v, ms) }, Sfx.preload(), Sfx.warm(group), Sfx.on (get/set), Sfx.ctx().
 const Sfx = (() => {
   const rnd = (a, b) => a + Math.random() * (b - a), clamp = (v, a, b) => v < a ? a : v > b ? b : v;
   // n: variants. v: level. pj: pitch spread (+-). vj: level spread (+-). gap: min ms between plays. max: voices at once.
@@ -32,22 +32,22 @@ const Sfx = (() => {
     'glove-wave':            { n: 1, v: .6, pj: .1, vj: .15, gap: 500, max: 1, soft: [.5, 10, 40] },
     'glove-wheel-grab':      { n: 3, v: .75, pj: .07, vj: .1, gap: 200, max: 2 },
     'glove-whoosh':          { n: 4, v: .55, pj: .12, vj: .2, gap: 140, max: 2, soft: [.5, 15, 60] },
-    // New Glove gestures, no samples yet. `todo` entries load nothing and play their fallback `fb` [group, opts] (or stay
-    // silent without one). To go live: add sfx/<group>-1.mp3 (-2, -3 ...), set n to the number of variants, delete todo.
-    'glove-coin-flick':      { n: 1, todo: 1, fb: ['glove-snap', { rate: 1.45, vol: .5 }], v: .65, pj: .06, vj: .1, gap: 300, max: 1 },
-    'glove-coin-catch':      { n: 1, todo: 1, fb: ['glove-clench', { rate: 1.2, vol: .8 }], v: .7, pj: .06, vj: .1, gap: 300, max: 1 },
-    'glove-kiss':            { n: 1, todo: 1, v: .7, pj: .05, vj: .1, gap: 1200, max: 1 },
-    'glove-rock':            { n: 1, todo: 1, v: .7, pj: .02, vj: .08, gap: 1500, max: 1, soft: [.4, 6, 25] },
-    'glove-shaka':           { n: 1, todo: 1, v: .65, pj: .05, vj: .1, gap: 1000, max: 1, soft: [.4, 6, 25] },
-    'glove-slam':            { n: 1, todo: 1, fb: ['glove-punch', { rate: .78, vol: 1.1 }], v: .85, pj: .06, vj: .1, gap: 150, max: 2 },
-    'glove-sweep':           { n: 1, todo: 1, fb: ['glove-whoosh', { rate: .8 }], v: .65, pj: .06, vj: .12, gap: 600, max: 1, soft: [.5, 10, 40] },
-    'glove-hurry':           { n: 1, todo: 1, fb: ['glove-whoosh', { rate: 1.3, vol: .5 }], v: .6, pj: .05, vj: .1, gap: 1000, max: 1, soft: [.4, 6, 25] },
-    'glove-twirl':           { n: 1, todo: 1, fb: ['glove-whoosh', { rate: 1.5, vol: .55 }], v: .6, pj: .08, vj: .12, gap: 400, max: 1 },
-    'glove-holster':         { n: 1, todo: 1, fb: ['glove-clench', { rate: .9 }], v: .65, pj: .06, vj: .1, gap: 400, max: 1 },
-    'glove-stretch':         { n: 1, todo: 1, v: .55, pj: .05, vj: .1, gap: 2500, max: 1, soft: [.6, 20, 80] },
-    'glove-step':            { n: 1, todo: 1, fb: ['glove-tap', { rate: 1.35, vol: .4 }], v: .45, pj: .12, vj: .25, gap: 60, max: 3 },
-    'glove-cross':           { n: 1, todo: 1, v: .5, pj: .03, vj: .08, gap: 1500, max: 1, soft: [.8, 40, 140] },
-    'glove-dizzy':           { n: 1, todo: 1, v: .6, pj: .04, vj: .1, gap: 2000, max: 1, soft: [.5, 10, 40] },
+    // Glove gestures with style sets. Files: sfx/<group>-<set>-NN.mp3. Sfx.play(g, { set }) takes a set name, an array of
+    // names, or { name: weight }; without it any take of any set can play. Each set keeps its own shuffle bag.
+    'glove-coin-flick':      { sets: { metallic: 2, snappy: 2 }, v: .65, pj: .06, vj: .1, gap: 300, max: 1 },
+    'glove-coin-catch':      { sets: { gloved: 2, leather: 4 }, v: .7, pj: .06, vj: .1, gap: 300, max: 1 },
+    'glove-kiss':            { sets: { cartoon: 4, foley: 3, tactile: 4, fast: 1 }, v: .7, pj: .05, vj: .1, gap: 1200, max: 1 },
+    'glove-rock':            { sets: { electric: 3, airguitar: 1, percussive: 3 }, v: .7, pj: .02, vj: .08, gap: 1500, max: 1, soft: [.4, 6, 25] },
+    'glove-shaka':           { sets: { breezy: 2, surf: 6, foley: 2 }, v: .65, pj: .05, vj: .1, gap: 1000, max: 1, soft: [.4, 6, 25] },
+    'glove-slam':            { sets: { felt: 4, cartoon: 4 }, v: .85, pj: .06, vj: .1, gap: 150, max: 2 },
+    'glove-sweep':           { sets: { felt: 5, wave: 4 }, v: .65, pj: .06, vj: .12, gap: 600, max: 1, soft: [.5, 10, 40] },
+    'glove-hurry':           { sets: { airy: 3, cartoon: 4 }, v: .6, pj: .05, vj: .1, gap: 1000, max: 1, soft: [.4, 6, 25] },
+    'glove-twirl':           { sets: { western: 3, slick: 3 }, v: .6, pj: .08, vj: .12, gap: 400, max: 1 },
+    'glove-holster':         { sets: { leather: 4, cartoon: 3 }, v: .65, pj: .06, vj: .1, gap: 400, max: 1 },
+    'glove-stretch':         { sets: { knuckle: 4, cartoon: 3 }, v: .55, pj: .05, vj: .1, gap: 2500, max: 1, soft: [.6, 20, 80] },
+    'glove-step':            { sets: { felt: 3, wood: 2, pizzicato: 1 }, v: .45, pj: .12, vj: .25, gap: 60, max: 3 },
+    'glove-cross':           { sets: { tenseshimmer: 3, fidget: 3, anticipation: 3 }, v: .5, pj: .03, vj: .08, gap: 1500, max: 1, soft: [.8, 40, 140] },
+    'glove-dizzy':           { sets: { cartoon: 3, foley: 3 }, v: .6, pj: .04, vj: .1, gap: 2000, max: 1, soft: [.5, 10, 40] },
     'loss':                  { n: 2, v: .65, pj: .03, vj: .08, gap: 1500, max: 1, soft: [.5, 10, 50] },
     'wheel-land':            { n: 7, v: .75, pj: .03, vj: .08, gap: 600, max: 1, soft: [.3, 4, 15] },
     'wheel-land-settle':     { n: 5, v: .7, pj: .04, vj: .1, gap: 600, max: 1 },
@@ -71,30 +71,48 @@ const Sfx = (() => {
     if (ac.state === 'suspended') ac.resume();
     return ac;
   }
-  const files = g => { const d = DEF[g]; return d.n ? Array.from({ length: d.n }, (_, i) => `${g}-${i + 1}`) : [d.file]; };
+  const pad = i => String(i).padStart(2, '0');
+  const setFiles = (g, k) => Array.from({ length: DEF[g].sets[k] }, (_, i) => `${g}-${k}-${pad(i + 1)}`);
+  const files = (g, set) => {
+    const d = DEF[g];
+    if (d.sets) return set ? setFiles(g, set) : Object.keys(d.sets).flatMap(k => setFiles(g, k));
+    return d.n ? Array.from({ length: d.n }, (_, i) => `${g}-${i + 1}`) : [d.file];
+  };
+  // o.set: name, [names] or { name: weight } -> one valid set name (or null = all takes)
+  function pickSet(g, s) {
+    const d = DEF[g]; if (!d.sets || !s) return null;
+    if (typeof s === 'string') return d.sets[s] ? s : null;
+    const w = Array.isArray(s) ? s.map(k => [k, 1]) : Object.entries(s);
+    const ok = w.filter(([k, v]) => d.sets[k] && v > 0); if (!ok.length) return null;
+    let r = Math.random() * ok.reduce((a, [, v]) => a + v, 0);
+    for (const [k, v] of ok) if ((r -= v) <= 0) return k;
+    return ok[ok.length - 1][0];
+  }
   function load(f) {
     if (f in buf) return Promise.resolve(buf[f]);
     if (!pend[f]) pend[f] = fetch('sfx/' + f + '.mp3').then(r => { if (!r.ok) throw 0; return r.arrayBuffer(); })
       .then(a => new Promise((ok, no) => ctx().decodeAudioData(a, ok, no))).then(b => buf[f] = b).catch(() => { buf[f] = null; });
     return pend[f];
   }
-  function preload(groups) { (groups || Object.keys(DEF)).forEach(g => DEF[g] && !DEF[g].todo && files(g).forEach(load)); }
+  // Set groups preload one take per set up front; the rest load the first time the group plays (keeps decode memory down).
+  function preload(groups) { (groups || Object.keys(DEF)).forEach(g => { const d = DEF[g]; if (!d) return; (d.sets ? Object.keys(d.sets).map(k => setFiles(g, k)[0]) : files(g)).forEach(load); }); }
+  const warm = {};
+  function warmUp(g) { if (DEF[g].sets && !warm[g]) { warm[g] = 1; files(g).forEach(load); } }
   // Shuffle bag: every variant plays once before any repeats, and a new bag never starts with the last one played.
-  function pickFile(g) {
-    const fl = files(g); if (fl.length === 1) return fl[0];
-    if (!bag[g] || !bag[g].length) {
+  function pickFile(g, set) {
+    const fl = files(g, set), key = set ? g + '/' + set : g; if (fl.length === 1) return lastPick[g] = fl[0];
+    if (!bag[key] || !bag[key].length) {
       const b = fl.slice(); for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; }
       if (b[b.length - 1] === lastPick[g]) [b[0], b[b.length - 1]] = [b[b.length - 1], b[0]];
-      bag[g] = b;
+      bag[key] = b;
     }
-    return lastPick[g] = bag[g].pop();
+    return lastPick[g] = bag[key].pop();
   }
   const NOOP = { stop() {}, gain() {}, get dead() { return true; } };
-  // o: vol, rate, pan (-1..1), delay (ms), fadeIn (ms, overrides soft), fadeOut (ms before the end, or with dur),
+  // o: set (style set, see DEF), vol, rate, pan (-1..1), delay (ms), fadeIn (ms, overrides soft), fadeOut (ms before the end, or with dur),
   //    dur (ms, cut and fade), offset (ms), loop, force (ignore gap), file (exact variant)
   function play(g, o = {}) {
-    const d = DEF[g]; if (!on || !d) return NOOP;
-    if (d.todo) { if (!d.fb) return NOOP; const f = d.fb[1] || {}; return play(d.fb[0], { ...o, ...f, vol: (o.vol ?? 1) * (f.vol ?? 1), rate: (o.rate || 1) * (f.rate || 1) }); }
+    const d = DEF[g]; if (!on || !d) return NOOP; warmUp(g);
     const t = performance.now();
     if (!o.force && t - (lastAt[g] || -1e9) < (d.gap || 0)) return NOOP;
     const vs = voices[g] || (voices[g] = []);
@@ -102,7 +120,9 @@ const Sfx = (() => {
     for (let i = vs.length - 1; i >= 0; i--) if (vs[i].dead) vs.splice(i, 1);
     if (vs.length >= (d.max || 4)) vs.shift().stop(40);
     lastAt[g] = t; }
-    const f = o.file || pickFile(g), b = buf[f];
+    let f = o.file;
+    if (!f) { const set = pickSet(g, o.set); f = pickFile(g, set); if (buf[f] === undefined && d.sets) { const ready = files(g, set).filter(x => buf[x]); if (ready.length) f = ready[Math.floor(Math.random() * ready.length)]; } }
+    const b = buf[f];
     if (b === undefined) {
       // not decoded yet: play when it arrives if that is soon, else drop it (a late hit sounds wrong)
       const h = { x: false, real: null, get dead() { return this.x || (!!this.real && this.real.dead); }, stop(ms) { this.x = true; if (this.real) this.real.stop(ms); }, gain(v, ms) { if (this.real) this.real.gain(v, ms); } };
@@ -153,6 +173,6 @@ const Sfx = (() => {
     try { const c = ctx(), o = c.createOscillator(), g = c.createGain(); o.type = 'triangle'; o.frequency.value = f; g.gain.setValueAtTime(v, c.currentTime); g.gain.exponentialRampToValueAtTime(.0001, c.currentTime + dur); o.connect(g).connect(out); o.start(); o.stop(c.currentTime + dur); } catch {}
   }
   function stopAll(ms = 150) { Object.values(voices).forEach(vs => vs.forEach(h => h.stop(ms))); }
-  return { play, tone, preload, ctx, stopAll, get on() { return on; }, set on(v) { on = !!v; if (!on) stopAll(80); } };
+  return { play, tone, preload, warm: g => DEF[g] && warmUp(g), ctx, stopAll, get on() { return on; }, set on(v) { on = !!v; if (!on) stopAll(80); } };
 })();
 if (typeof window !== 'undefined') window.Sfx = Sfx;
