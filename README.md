@@ -33,6 +33,17 @@ When the wheel lands on a bonus field, players who bet on it (backers) always pl
 
 Tuning lives at the top of `public/core.js` (`JOIN_MS`, `LATE_PAY`, `lateShare`). Subgames can read `ctx.backer(pid)` and `ctx.late(pid)` for game specific edges.
 
+## Wheel weighting
+
+The wheel is random with two small leans (`pickIndex` in `public/core.js`):
+
+| Lean | Effect |
+|---|---|
+| Dry streak | Bonus fields get +5% weight per 1 or 2 in a row, max +40%. Resets on a bonus hit. |
+| Crowd | Each field's weight drops by 12% x (share of bettors on it, needs 2+ bettors) plus 12% x (share of all Orra staked on it). Max 24% less. |
+
+Example, 4 bettors: 3 on Ten holding 60% of the Orra. Ten weight = 1 - 0.12 x 0.75 - 0.12 x 0.6 = 0.84. Tuning: `CROWD_PLAYERS`, `CROWD_STAKE`, `CROWD_MAX` in `public/shared.js`.
+
 ## Optional: run your own server
 
 The Node server still works and does not need the peer to peer layer:

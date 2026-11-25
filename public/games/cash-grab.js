@@ -34,10 +34,10 @@
         b.disabled = v.phase !== 'shoot' || !api.part || !!own || !(v.shots[api.me] > 0) || v.bomb;
       });
       const note = el.querySelector('#ms-note'), act = el.querySelector('#ms-act');
-      note.textContent = v.phase === 'preview' ? 'Memorise the gallery. The golden target gives a free extra shot.' : v.phase === 'shuffle' ? 'Shuffling... keep your eyes on the big ones.' : v.phase === 'shoot' ? (api.part ? `Shots left: ${v.shots[api.me]}. First shot claims a target.` : 'Players are shooting.') : 'Final gallery.';
+      note.textContent = v.phase === 'preview' ? 'Memorise the values. Gold = extra shot.' : v.phase === 'shuffle' ? 'Shuffling. Follow the big ones.' : v.phase === 'shoot' ? (api.part ? `Shots: ${v.shots[api.me]}. First hit claims.` : 'Players are shooting.') : 'Final gallery.';
       act.innerHTML = api.players.map(p => `<span class="bp" style="--c:${p.color}"><i></i>${esc(p.name)} ${v.got[p.id]}x${v.halves[p.id] ? ` (halved ${v.halves[p.id]}x)` : ''}</span>`).join('');
       if (v.bomb) {
-        act.insertAdjacentHTML('beforeend', '<p style="width:100%">Bomb! Pick a rival to halve:</p>' + api.players.filter(p => p.id !== api.me).map(p => `<button class="btn" data-b="${p.id}"><span class="pdot" style="--c:${p.color}"></span>${esc(p.name)}</button>`).join(''));
+        act.insertAdjacentHTML('beforeend', '<p style="width:100%">Bomb. Halve a rival:</p>' + api.players.filter(p => p.id !== api.me).map(p => `<button class="btn" data-b="${p.id}"><span class="pdot" style="--c:${p.color}"></span>${esc(p.name)}</button>`).join(''));
         act.querySelectorAll('[data-b]').forEach(b => b.onclick = () => api.send({ bomb: b.dataset.b }));
       }
     }
@@ -57,11 +57,11 @@
       const act = el.querySelector('#ts-act'), note = el.querySelector('#ts-note');
       act.innerHTML = '';
       if (v.phase === 'trap') {
-        note.textContent = `Place 2 secret traps (${v.myTraps.length}/2). Locked: ${v.lock.map(api.name).join(', ') || 'nobody'}.`;
+        note.textContent = `Place 2 traps (${v.myTraps.length}/2). Locked: ${v.lock.map(api.name).join(', ') || 'nobody'}.`;
         if (api.part && !v.lock.includes(api.me)) { act.innerHTML = `<button class="btn go" id="ts-lock" ${v.myTraps.length === 2 ? '' : 'disabled'}>Lock traps</button>`; el.querySelector('#ts-lock').onclick = () => api.send({ lock: true }); }
-      } else if (v.phase === 'pick') note.textContent = `Pick one target. Trapped targets cost 3x. Untouched targets give +2x. Picked: ${v.picked.map(api.name).join(', ') || 'nobody'}.`;
+      } else if (v.phase === 'pick') note.textContent = `Pick 1 target. Trap -3x, alone and untrapped +2x. Picked: ${v.picked.map(api.name).join(', ') || 'nobody'}.`;
       else {
-        note.textContent = 'Square marks are traps, round marks are picks.';
+        note.textContent = 'Square = trap, round = pick.';
         el.querySelector('#ts-res').innerHTML = `<table class="res">${api.players.map(p => `<tr class="${p.id === api.me ? 'me' : ''}"><td><span class="pdot" style="--c:${p.color}"></span>${esc(p.name)}</td><td>${(v.detail[p.id] || []).map(esc).join(', ')}</td><td class="n">${fx2(v.res[p.id])}x</td></tr>`).join('')}</table>`;
       }
     }
@@ -73,10 +73,10 @@
       const g = el.querySelector('#la-g'), myB = v.bullets[api.me] || 0, cool = v.cool > now();
       g.innerHTML = v.cells.map((c, i) => `<button class="cell ${c.o ? 'own' : c.v !== undefined ? 'open' : ''} ${v.lastShot && v.lastShot.i === i && now() - v.lastShot.at < 1200 ? 'mine' : ''}" data-i="${i}" style="--c:${c.o ? api.color(c.o) : ''};min-height:38px" ${v.phase === 'live' && api.part && myB > 0 && !v.hold[api.me] && c.o !== api.me ? '' : 'disabled'}>${c.v !== undefined ? c.v + 'x' : '?'}</button>`).join('');
       g.querySelectorAll('button').forEach(b => b.onclick = () => { api.send({ shoot: +b.dataset.i }); tone(220, .12, .07); });
-      el.querySelector('#la-note').textContent = v.phase === 'live' ? (api.part ? `Bullets: ${myB}. Each shot reveals its whole row. Shooting a claimed target steals it. Unused bullets become Shields.${cool ? ' Reloading...' : ''}` : 'Players are shooting.') : 'Final gallery.';
+      el.querySelector('#la-note').textContent = v.phase === 'live' ? (api.part ? `Bullets: ${myB}. A shot reveals its row. Hit a rival's target to steal it.${cool ? ' Reloading...' : ''}` : 'Players are shooting.') : 'Final gallery.';
       const act = el.querySelector('#la-act');
       act.innerHTML = api.players.map(p => `<span class="bp" style="--c:${p.color}"><i></i>${esc(p.name)} ${v.totals[p.id]}x, ${v.bullets[p.id]} left${v.hold[p.id] ? ', holding' : ''}</span>`).join('');
-      if (v.phase === 'live' && api.part && myB > 0 && !v.hold[api.me]) { act.insertAdjacentHTML('beforeend', `<button class="btn" id="la-hold">Hold my ${myB} bullet${myB > 1 ? 's' : ''} (become Shields)</button>`); el.querySelector('#la-hold').onclick = () => api.send({ hold: true }); }
+      if (v.phase === 'live' && api.part && myB > 0 && !v.hold[api.me]) { act.insertAdjacentHTML('beforeend', `<button class="btn" id="la-hold">Keep ${myB} as Shield${myB > 1 ? 's' : ''}</button>`); el.querySelector('#la-hold').onclick = () => api.send({ hold: true }); }
       if (cool) { clearTimeout(st.t); st.t = setTimeout(() => this.update(el, st, v, api), v.cool - now() + 30); }
     }
   };
@@ -96,7 +96,7 @@
       if (st.first === undefined && v.aim[api.me] !== undefined) { st.aim = v.aim[api.me]; st.first = 1; }
       el.querySelector('#rc-lock').disabled = el.querySelector('#rc-l').disabled = el.querySelector('#rc-r').disabled = !st.live;
       v.shots.forEach((s, i) => { if (!st.anim[i]) { st.anim[i] = performance.now(); tone(500, .1); } });
-      el.querySelector('#rc-note').textContent = v.phase === 'aim' ? `Aim with the mouse, click to lock. Shots fire in lock order: ${v.order.map(api.name).join(', ') || 'nobody locked yet'}.` : v.phase === 'fire' ? 'Firing in lock order...' : 'Results: ' + api.players.map(p => `${p.name} ${v.res ? v.res[p.id] : 0}x`).join(', ');
+      el.querySelector('#rc-note').textContent = v.phase === 'aim' ? `Aim with the mouse, click to lock. Order: ${v.order.map(api.name).join(', ') || 'nobody yet'}.` : v.phase === 'fire' ? 'Firing...' : 'Results: ' + api.players.map(p => `${p.name} ${v.res ? v.res[p.id] : 0}x`).join(', ');
     },
     frame(el, st, v, api) {
       if (!st.v) return; v = st.v;

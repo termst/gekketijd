@@ -6,10 +6,10 @@ const pos = (ms) => { const x = ((ms % PERIOD) + PERIOD) % PERIOD / PERIOD; retu
 module.exports = {
   id: 'duel', cat: 'spare', name: 'Coin Duel',
   rules: [
-    'Players face off in pairs. A coin spins and a marker sweeps the timing bar. Stop it as close to your color\'s sweet spot as you can.',
-    'Your stop sets your multiplier, from 2x (far away) to 20x (dead on).',
-    'The winner of each duel steals 25% of the loser\'s multiplier.',
-    'A perfect stop wins a free Swap token. An odd player out duels the House.'
+    'Duel: you face 1 player. A marker sweeps the bar. Press STOP on your color\'s mark.',
+    'Pay: closer stop, higher multiplier. 2x far off, 20x dead on.',
+    'Steal: the better stop takes 25% of the loser\'s multiplier.',
+    'Extra: a perfect stop earns a Swap token. The odd player out duels the House.'
   ],
   PERIOD, WINDOW, SPOT,
   create(ctx) {

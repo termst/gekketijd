@@ -5,10 +5,10 @@ const AIM_MS = 15000, SHOT_MS = 2600, COLORS = ['red', 'blue', 'green', 'gold'],
 module.exports = {
   id: 'ricochet', cat: 'grab', name: 'Ricochet',
   rules: [
-    'You get 1 shot. Aim the angle; the bullet bounces off the walls and passes through up to 3 targets.',
-    'You receive the best target it hits. Every target it passes through is destroyed for everyone.',
-    'Everyone sees each other\'s aim live. Shots fire in the order players lock in, so aim your path through the zones rivals are targeting.',
-    'Hitting 3 targets of the same color grants a combo: your best value x3.'
+    'Aim: 1 shot. It bounces off the walls and passes through up to 3 targets.',
+    'Score: the best value you hit. Every target hit is destroyed.',
+    'Order: shots fire in lock-in order, so earlier shots clear targets first. All aims are visible live.',
+    'Combo: 3 hits of the same color triple your best value.'
   ],
   create(ctx) {
     const ids = ctx.ids, T = [], vals = ctx.shuffle(pool([[2, 8], [3, 8], [5, 7], [8, 5], [10, 4], [15, 3], [25, 2], [40, 2], [60, 1]]));

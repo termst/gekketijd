@@ -5,10 +5,10 @@ const BUILD_MS = 15000, MAX_DOUBLES = 3;
 module.exports = {
   id: 'pegs', cat: 'drop', name: 'Peg Builder',
   rules: [
-    'Each player owns 2 slots at the bottom. Before the drop, place 2 extra pegs anywhere on the board.',
-    'Use your pegs to steer the puck to your slots, or to block the paths that lead to rivals\' slots. Pegs show up live.',
-    'One shared puck drops. The owner of the slot it lands in collects its value.',
-    'The neutral DOUBLE slot doubles every slot and drops the puck again.'
+    'Slots: you own 2 bottom slots, marked in your color.',
+    'Build: place 2 pegs to steer the puck to your slots or away from rivals\'.',
+    'Drop: 1 shared puck. The owner of the slot it lands in collects its value.',
+    'DOUBLE: neutral slot. Doubles every slot and drops again.'
   ],
   create(ctx) {
     const ids = ctx.ids, n = Math.max(13, ids.length * 2 + 1);

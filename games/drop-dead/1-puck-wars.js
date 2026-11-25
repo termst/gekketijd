@@ -5,10 +5,10 @@ const SLOTS = 12, DROP_MS = 8000, EXTRA_MS = 5000, MAX_PUCKS = 4;
 module.exports = {
   id: 'puckwars', cat: 'drop', name: 'Puck Wars',
   rules: [
-    'Everyone drops their own puck on the same board. Choose your position and your moment. Pucks collide and knock each other off course.',
-    'Drop next to the leader (crown) to knock their puck away.',
-    'You keep the value of the slot your puck lands in.',
-    'Landing on DOUBLE doubles only your multiplier and grants you a second puck.'
+    'Drop: move to pick a spot, click to drop (auto after 8 seconds). All pucks share 1 board and collide.',
+    'Score: the slot your puck lands in.',
+    'Leader: the richest player is marked. Knock their puck off course.',
+    'DOUBLE: doubles your result and gives you 1 more puck.'
   ],
   create(ctx) {
     const ids = ctx.ids, vals = slotValues(ctx, SLOTS, 2);

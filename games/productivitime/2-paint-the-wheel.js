@@ -5,10 +5,9 @@ const N = 64, BUDGET = 6, PAINT_MS = 20000, SPIN_MS = 5000, SCORING = 3, MAX_JAC
 module.exports = {
   id: 'paint', cat: 'prod', name: 'Paint the Wheel',
   rules: [
-    'Claim 6 of the 64 segments with your color. Painting over a rival\'s segment costs double (2 of your 6 points). DOUBLE and TRIPLE stay neutral.',
-    'The wheel spins 3 scoring times. The owner of the landing segment collects its value, and the owners of the 2 neighbouring segments collect 50% of it.',
-    'So steal claimed segments positioned next to high multipliers.',
-    'Landing on a neutral DOUBLE or TRIPLE multiplies every segment for everyone and spins again: a shared jackpot moment.'
+    'Paint: 6 points. A free segment costs 1, a rival\'s costs 2. DOUBLE and TRIPLE cannot be painted.',
+    'Score: 3 spins. The landing segment\'s owner collects its value, both neighbours collect 50%.',
+    'Jackpot: landing on DOUBLE or TRIPLE multiplies every segment and spins again (free spin).'
   ],
   create(ctx) {
     const ids = ctx.ids;

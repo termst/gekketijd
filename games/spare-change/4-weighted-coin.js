@@ -4,10 +4,9 @@ const POINTS = 10, BID_MS = 12000;
 module.exports = {
   id: 'weighted', cat: 'spare', name: 'Weighted Coin',
   rules: [
-    'Both sides show a multiplier. Secretly back Red or Blue and bid up to 10 points on it. Each point adds +5% chance to that side.',
-    'The coin flips with the final weighted odds (5% to 95%).',
-    'Bid points are spent even if your side loses. Every unspent point is worth 0.5x at the end, so baiting rivals into overspending pays.',
-    'Whoever bid the most on the winning side also gets the Top Slot multiplier.'
+    'Bid: pick Red or Blue and bid 0 to 10 points. Each point adds +5% chance to that side (5% to 95%).',
+    'Pay: the winning side pays its multiplier. Its top bidder also gets the Top Slot multiplier.',
+    'Keep: every unspent point pays 0.5x, win or lose.'
   ],
   create(ctx) {
     const ids = ctx.ids, bids = {}, lock = {};

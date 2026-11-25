@@ -5,10 +5,10 @@ const SLOTS = 12, LEAD = 2500, SAFE = 3;
 module.exports = {
   id: 'tilt', cat: 'drop', name: 'Tilt',
   rules: [
-    'Everyone has their own board and puck, dropping live. You have 3 nudges that tilt your board left or right.',
-    'A 4th nudge triggers TILT and destroys your puck.',
-    'You can spend 1 of your nudges on a rival\'s board instead of your own.',
-    'Finishing with 0 nudges used grants +3x on top of your slot.'
+    'Board: everyone drops on their own board.',
+    'Nudge: 3 nudges to tilt left or right (arrow keys work). A 4th is TILT: puck destroyed, 0x.',
+    'Rival: 1 of your nudges may go to a rival\'s board.',
+    'Bonus: 0 nudges used is +3x.'
   ],
   create(ctx) {
     const ids = ctx.ids, vals = slotValues(ctx, SLOTS, 0), x0 = 200 + ctx.rand() * 200;

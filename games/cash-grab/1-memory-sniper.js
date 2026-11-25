@@ -5,10 +5,10 @@ const N = 108, COLS = 12, PREVIEW = 3000, WAVE = 1100, SHOOT_MS = 15000, BOMB_MS
 module.exports = {
   id: 'sniper', cat: 'grab', name: 'Memory Sniper',
   rules: [
-    '108 multipliers are shown for 3 seconds, then hidden and shuffled in front of you. Track the big ones.',
-    'Shoot a target to claim it. The first shot claims it and locks it for everyone else.',
-    '5 hidden bomb targets are in the gallery. Hit one and you pick a rival whose multiplier gets halved.',
-    'The single golden target is marked in the preview. Hitting it grants a free extra shot.'
+    'Watch: 108 targets show their value for 3 seconds, then hide and shuffle. Follow the big ones.',
+    'Shoot: 1 shot. The first hit claims a target.',
+    'Gold: the golden target (marked in the preview) gives 1 extra shot.',
+    'Bomb: 5 targets are bombs in disguise. Hit one and you halve a rival\'s result.'
   ],
   create(ctx) {
     const vals = ctx.shuffle(pool([[5, 26], [7, 18], [10, 18], [15, 12], [20, 10], [25, 7], [50, 6], [75, 3], [100, 2]])).slice(0, N - 6);

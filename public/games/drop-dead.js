@@ -17,7 +17,7 @@
     update(el, st, v, api) {
       st.v = v;
       const me = v.P[api.me];
-      el.querySelector('#pw-note').textContent = me ? (me.left > 0 ? `Move to choose your spot, click to drop. ${me.until > now() ? 'Second puck: drop now!' : ''}` : 'Your puck is in play.') : 'Watching.';
+      el.querySelector('#pw-note').textContent = me ? (me.left > 0 ? `${me.until > now() ? 'Extra puck: drop now.' : 'Move to aim, click to drop.'}` : 'Your puck is in play.') : 'Watching.';
       el.querySelector('#pw-act').innerHTML = api.players.map(p => { const q = v.P[p.id]; return `<span class="bp" style="--c:${p.color}"><i></i>${esc(p.name)}${p.id === v.leader ? ' (leader)' : ''} ${q.value !== null ? q.value + 'x' : q.left ? 'to drop' : 'falling'}${q.factor > 1 ? ' x' + q.factor : ''}</span>`; }).join('');
     },
     fx(el, st, d) { if (d.p) track(st, d.p.main); },
@@ -44,13 +44,13 @@
         const [x, y] = worldX(c, e), mine = v.extra[api.me], k = mine.findIndex(p => Math.hypot(p.x - x, p.y - y) < 16);
         if (k >= 0) return api.send({ unpeg: k });
         const all = RHS.basePegs().concat(...Object.values(v.extra));
-        if (mine.length < 2 && RHS.pegSpotOk(all, x, y)) { api.send({ peg: { x, y } }); tone(600, .06); } else RH.toast(mine.length >= 2 ? 'You placed both pegs. Click one to remove it.' : 'Too close to another peg.', 1500);
+        if (mine.length < 2 && RHS.pegSpotOk(all, x, y)) { api.send({ peg: { x, y } }); tone(600, .06); } else RH.toast(mine.length >= 2 ? 'Both pegs placed. Click one to remove it.' : 'Too close to another peg.', 1500);
       };
     },
     update(el, st, v, api) {
       st.v = v;
       const mine = v.owner.map((o, i) => o === api.me ? i : -1).filter(i => i >= 0);
-      el.querySelector('#pb-note').textContent = v.phase === 'build' ? `Your slots are marked in your color (${mine.map(i => v.vals[i] + 'x').join(' and ') || 'none'}). Click to place your 2 pegs (${(v.extra[api.me] || []).length}/2).` : v.phase === 'drop' ? `Dropping...${v.doubles ? ' DOUBLE x' + Math.pow(2, v.doubles) : ''}` : 'Done.';
+      el.querySelector('#pb-note').textContent = v.phase === 'build' ? `Your slots: ${mine.map(i => v.vals[i] + 'x').join(' and ') || 'none'}. Click to place pegs (${(v.extra[api.me] || []).length}/2).` : v.phase === 'drop' ? `Dropping...${v.doubles ? ' DOUBLE x' + Math.pow(2, v.doubles) : ''}` : 'Done.';
       const act = el.querySelector('#pb-act');
       act.innerHTML = api.players.map(p => `<span class="bp" style="--c:${p.color}"><i></i>${esc(p.name)} ${v.res[p.id]}x${v.lock.includes(p.id) ? ' (locked)' : ''}</span>`).join('');
       if (v.phase === 'build' && api.part && !v.lock.includes(api.me)) { act.insertAdjacentHTML('beforeend', `<button class="btn go" id="pb-lock" ${(v.extra[api.me] || []).length === 2 ? '' : 'disabled'}>Lock pegs</button>`); el.querySelector('#pb-lock').onclick = () => api.send({ lock: true }); }
@@ -79,15 +79,15 @@
       const note = el.querySelector('#sa-note');
       if (v.phase === 'auction' && v.lot < v.vals.length) {
         const hi = v.high ? v.high.amt : 0;
-        note.textContent = `Lot ${v.lot + 1}/${v.vals.length}: slot ${v.vals[v.lot]}${v.vals[v.lot] === 'DOUBLE' ? '' : 'x'}. High bid ${v.high ? hi + 'x by ' + api.name(v.high.pid) : 'none'}. You have ${my !== undefined ? my : 0}x.`;
+        note.textContent = `Lot ${v.lot + 1}/${v.vals.length}: ${v.vals[v.lot]}${v.vals[v.lot] === 'DOUBLE' ? '' : 'x'}. Top bid: ${v.high ? hi + 'x ' + api.name(v.high.pid) : 'none'}. You: ${my !== undefined ? my : 0}x.`;
         if (api.part) {
           act.insertAdjacentHTML('beforeend', [1, 2, 5].map(k => `<button class="btn" data-b="${hi + k}" ${hi + k > my || (v.high && v.high.pid === api.me) ? 'disabled' : ''}>Bid ${hi + k}x</button>`).join(''));
           act.querySelectorAll('[data-b]').forEach(b => b.onclick = () => { api.send({ bid: +b.dataset.b }); tone(640, .08); });
         }
       } else if (v.phase === 'steal') {
-        note.textContent = `${api.name(v.owner[v.dslot])} owns DOUBLE and chooses a slot to steal.`;
+        note.textContent = `${api.name(v.owner[v.dslot])} owns DOUBLE and may steal 1 slot.`;
         if (v.owner[v.dslot] === api.me) { act.insertAdjacentHTML('beforeend', '<button class="btn" id="sa-skip">Skip steal</button>'); el.querySelector('#sa-skip').onclick = () => api.send({ skip: true }); }
-      } else note.textContent = v.phase === 'drop' ? `Puck ${v.dropN}/${v.pucks}` : v.phase === 'done' ? 'Auction closed.' : 'Get ready to bid.';
+      } else note.textContent = v.phase === 'drop' ? `Puck ${v.dropN}/${v.pucks}` : v.phase === 'done' ? 'Auction closed.' : 'Bidding starts...';
     },
     fx(el, st, d) { if (d.p) { const id = d.p.main[0] && d.p.main[0][0]; if (st.pid !== id) { st.pid = id; st.pk = {}; } track(st, d.p.main); } },
     frame(el, st, _, api) {
@@ -118,7 +118,7 @@
         act.querySelectorAll('[data-n]').forEach(b => b.onclick = () => { api.send({ nudge: +b.dataset.n }); tone(250, .15, .08); });
       } else act.innerHTML = '';
       el.querySelectorAll('[data-r]').forEach(b => b.disabled = v.rival[api.me] || v.phase !== 'live');
-      el.querySelector('#tl-note').textContent = v.phase === 'lead' ? `Drop in ${secs(v.t0)}...` : v.tilted[api.me] ? 'TILT. Your puck is destroyed.' : u >= 3 ? 'Careful: the next nudge triggers TILT.' : `Nudges used ${u}/3. Arrow keys work too. 0 nudges used = +3x. 1 nudge may go to a rival board.`;
+      el.querySelector('#tl-note').textContent = v.phase === 'lead' ? `Drop in ${secs(v.t0)}...` : v.tilted[api.me] ? 'TILT. Your puck is destroyed.' : u >= 3 ? 'Next nudge = TILT.' : `Nudges ${u}/3 (arrow keys). 0 used = +3x.`;
       if (v.phase === 'done') removeEventListener('keydown', st.key);
     },
     fx(el, st, d) { if (d.b) for (const [id, fr] of Object.entries(d.b)) { st.bk = st.bk || {}; const s = st.bk[id] || (st.bk[id] = {}); track(s, fr); } },
