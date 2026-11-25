@@ -90,7 +90,7 @@ const RH = (() => {
   const COINS = [[5, '#b8452f', '#5c1a0e'], [10, '#2463b8', '#0d2f63'], [25, '#12805f', '#053f2e'], [100, '#23283a', '#05070d'], [500, '#c98a1e', '#6b4206']];
   function chipSvg([v, c, d]) {
     let e = ''; for (let i = 0; i < 8; i++) e += `<path d="M-8 -48A49 49 0 0 1 8 -48L6 -35H-6Z" fill="#fff6e6" transform="rotate(${i * 45})"/>`;
-    return `<svg viewBox="-50 -50 100 100" aria-hidden="true"><circle r="49" fill="${d}"/><circle r="47" fill="${c}"/>${e}<circle r="35" fill="${d}"/><circle r="32" fill="#fff6e6"/><circle r="28" fill="${c}"/><path d="M-41 -20A46 46 0 0 1 20 -41" stroke="#fff" stroke-opacity=".5" stroke-width="3" fill="none"/><text y="${v > 99 ? 7 : 8}" text-anchor="middle" font-family='${FONT}' font-weight="700" font-size="${v > 99 ? 21 : 25}" fill="#fff">${v}</text></svg>`;
+    return `<svg viewBox="-50 -50 100 100" aria-hidden="true"><circle r="49" fill="${d}"/><circle r="47" fill="${c}"/>${e}<circle r="35" fill="${d}"/><circle r="32" fill="#fff6e6"/><circle r="28" fill="${c}"/><path d="M-41 -20A46 46 0 0 1 20 -41" stroke="#fff" stroke-opacity=".5" stroke-width="3" fill="none"/><text y="${v > 99 ? 7 : 8}" text-anchor="middle" font-family='${FONT}' font-weight="400" font-size="${v > 99 ? 21 : 25}" letter-spacing="${v > 99 ? 1 : 1.2}" fill="#fff" stroke="#fff" stroke-width="${v > 99 ? 1.3 : 1.6}" stroke-linejoin="round">${v}</text></svg>`;
   }
   function stackHtml(n) { const a = []; for (const c of [...COINS].reverse()) while (n >= c[0] && a.length < 5) { a.push(c); n -= c[0]; } return '<span class="stack">' + a.map((c, i) => chipSvg(c).replace('<svg', '<svg style="bottom:' + i * 4 + 'px"')).join('') + '</span>'; }
   function scenery() {
@@ -111,6 +111,14 @@ const RH = (() => {
   const R = 450, CX = 550, CY = 575; let cx, face, angle = 0, flap = 0, blink = 0, hitSeg = -1;
   function metal(c, rot = 0) { const g = c.createConicGradient(rot, 0, 0); ['#f7e6ae', '#b48a38', '#5e4414', '#e6c673', '#fff3c9', '#b48a38', '#4d380f', '#e0bd62', '#f7e6ae'].forEach((x, i) => g.addColorStop(i / 8, x)); return g; }
   function star(c, n, a, b) { c.beginPath(); for (let i = 0; i < n * 2; i++) { const q = i / (n * 2) * TAU - Math.PI / 2, r = i % 2 ? b : a; c.lineTo(Math.cos(q) * r, Math.sin(q) * r); } c.closePath(); }
+  // Canvas twin of the CSS heft scale in style.css. Escargoth has one weight (400), so heft h (0..3) is a hairline
+  // outline plus tracking that grows slightly faster than the outline. Always set canvas fonts through heft().
+  function heft(c, px, h = 2) { c.font = `400 ${px}px ${FONT}`; c.letterSpacing = ((.01 + h * .015) * px).toFixed(2) + 'px'; c.heftW = h * .011 * px; }
+  function htext(c, s, x, y, max) {
+    s = String(s);
+    if (c.heftW) { c.save(); c.lineJoin = 'round'; c.lineWidth = c.heftW; c.strokeStyle = c.fillStyle; max ? c.strokeText(s, x, y, max) : c.strokeText(s, x, y); c.restore(); }
+    max ? c.fillText(s, x, y, max) : c.fillText(s, x, y);
+  }
   function disc(c, r, f) { c.beginPath(); c.arc(0, 0, r, 0, TAU); c.fillStyle = f; c.fill(); }
   function makeFace() {
     face = document.createElement('canvas'); face.width = face.height = 960; const c = face.getContext('2d'); c.translate(480, 480);
@@ -118,8 +126,8 @@ const RH = (() => {
       const t = TYPES[k], a = i * TAU / N - Math.PI / 2, w = TAU / N / 2, g = c.createRadialGradient(0, 0, 110, 0, 0, R);
       g.addColorStop(0, t.d); g.addColorStop(.7, t.c); g.addColorStop(1, t.c); c.fillStyle = g; c.beginPath(); c.moveTo(0, 0); c.arc(0, 0, R, a - w, a + w); c.closePath(); c.fill();
       c.strokeStyle = '#e6c673'; c.lineWidth = 2.5; c.stroke(); c.save(); c.rotate(a); c.textBaseline = 'middle'; c.fillStyle = t.t;
-      if (t.pay) { c.translate(R - 42, 0); c.rotate(Math.PI / 2); c.textAlign = 'center'; c.font = `700 ${t.pay > 9 ? 34 : 40}px ${FONT}`; c.fillText(t.n, 0, 3); }
-      else { c.save(); c.translate(R - 34, 0); star(c, 4, 17, 6); c.fill(); c.restore(); c.textAlign = 'right'; c.font = `700 30px ${FONT}`; c.fillText(t.n, R - 60, 2, 235); }
+      if (t.pay) { c.translate(R - 42, 0); c.rotate(Math.PI / 2); c.textAlign = 'center'; heft(c, t.pay > 9 ? 34 : 40, 3); htext(c, t.n, 0, 3); }
+      else { c.save(); c.translate(R - 34, 0); star(c, 4, 17, 6); c.fill(); c.restore(); c.textAlign = 'right'; heft(c, 30, 2); htext(c, t.n, R - 60, 2, 235); }
       c.restore();
     });
   }
@@ -139,7 +147,7 @@ const RH = (() => {
     c.save(); c.shadowColor = '#000c'; c.shadowBlur = 34; c.shadowOffsetY = 16; disc(c, 126, '#140a06'); c.restore(); disc(c, 126, metal(c, 1)); disc(c, 114, '#140a06');
     g = c.createRadialGradient(-30, -45, 10, 0, 0, 125); g.addColorStop(0, '#8a5230'); g.addColorStop(1, '#2c150b'); disc(c, 110, g);
     c.lineWidth = 3; c.strokeStyle = '#c9a14a'; c.beginPath(); c.arc(0, 0, 92, 0, TAU); c.stroke();
-    c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = '#f3dc98'; c.font = '700 46px ' + FONT; c.fillText('RARE', 0, -24); c.fillText('HOURS', 0, 26);
+    c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = '#f3dc98'; heft(c, 46, 3); htext(c, 'RARE', 0, -24); htext(c, 'HOURS', 0, 26);
     c.setTransform(1, 0, 0, 1, CX, 42); c.save(); c.shadowColor = '#000b'; c.shadowBlur = 14; c.shadowOffsetY = 8; c.rotate(flap);
     g = c.createLinearGradient(-20, 0, 20, 0); g.addColorStop(0, '#fff6dd'); g.addColorStop(.5, '#f4ecd8'); g.addColorStop(1, '#a99a78'); c.fillStyle = g;
     c.beginPath(); c.moveTo(-19, 0); c.lineTo(19, 0); c.lineTo(0, 130); c.closePath(); c.fill(); c.restore();
@@ -413,16 +421,16 @@ const RH = (() => {
       c.strokeStyle = '#e6c673'; c.lineWidth = 1.2; c.stroke();
       if (o.ring) { const col = o.ring(i); if (col) { c.beginPath(); c.arc(0, 0, r - 3, a - w + .01, a + w - .01); c.strokeStyle = col; c.lineWidth = 6; c.stroke(); } }
       c.save(); c.rotate(a); c.fillStyle = o.ink ? o.ink(i) : '#fff'; c.textAlign = 'right'; c.textBaseline = 'middle';
-      c.font = `700 ${Math.max(9, Math.min(20, TAU * r / n * .62))}px ${FONT}`; c.fillText(String(o.text(i)), r - 8, 1, r * .6);
+      heft(c, Math.max(9, Math.min(20, TAU * r / n * .62)), 2.5); htext(c, o.text(i), r - 8, 1, r * .6);
       c.restore();
     }
     disc(c, r * .22, metal(c, 1)); disc(c, r * .19, '#2c150b');
-    if (o.hub) { c.fillStyle = '#f3dc98'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.font = `700 ${r * .09}px ${FONT}`; c.fillText(o.hub, 0, 0); }
+    if (o.hub) { c.fillStyle = '#f3dc98'; c.textAlign = 'center'; c.textBaseline = 'middle'; heft(c, r * .09, 3); htext(c, o.hub, 0, 0); }
     for (const f of o.flappers || []) {
       const a = f.off * TAU / n - Math.PI / 2;
       c.save(); c.rotate(a + Math.PI / 2); c.translate(0, -r - 14);
       c.beginPath(); c.moveTo(-11, -14); c.lineTo(11, -14); c.lineTo(0, 16); c.closePath(); c.fillStyle = f.color; c.fill(); c.strokeStyle = '#000'; c.lineWidth = 2; c.stroke();
-      if (f.label) { c.rotate(-(a + Math.PI / 2)); c.fillStyle = '#fff'; c.font = `700 12px ${FONT}`; c.textAlign = 'center'; c.fillText(f.label, 0, -26); }
+      if (f.label) { c.rotate(-(a + Math.PI / 2)); c.fillStyle = '#fff'; heft(c, 12, 2); c.textAlign = 'center'; htext(c, f.label, 0, -26); }
       c.restore();
     }
     c.restore();
@@ -445,10 +453,10 @@ const RH = (() => {
       c.fillRect(i * sw + 1, RHS.SLOT_Y - 12, sw - 2, RHS.BH - RHS.SLOT_Y + 12);
       if (o.hit === i) { c.fillStyle = '#ffffff55'; c.fillRect(i * sw + 1, RHS.SLOT_Y - 12, sw - 2, RHS.BH - RHS.SLOT_Y + 12); }
       c.fillStyle = '#fff'; c.textAlign = 'center'; c.textBaseline = 'middle';
-      c.font = `700 ${v === 'DOUBLE' ? Math.min(14, sw * .3) : Math.min(22, sw * .42)}px ${FONT}`;
-      if (v === 'DOUBLE') { c.save(); c.translate(i * sw + sw / 2, RHS.SLOT_Y + 28); c.rotate(-Math.PI / 2); c.fillText('DOUBLE', 0, 0); c.restore(); }
-      else c.fillText(v + 'x', i * sw + sw / 2, RHS.SLOT_Y + 28);
-      if (o.label) { const l = o.label(i); if (l) { c.font = `700 11px ${FONT}`; c.fillText(l, i * sw + sw / 2, RHS.BH - 10); } }
+      v === 'DOUBLE' ? heft(c, Math.min(14, sw * .3), 2) : heft(c, Math.min(22, sw * .42), 3);
+      if (v === 'DOUBLE') { c.save(); c.translate(i * sw + sw / 2, RHS.SLOT_Y + 28); c.rotate(-Math.PI / 2); htext(c, 'DOUBLE', 0, 0); c.restore(); }
+      else htext(c, v + 'x', i * sw + sw / 2, RHS.SLOT_Y + 28);
+      if (o.label) { const l = o.label(i); if (l) { heft(c, 11, 1.5); htext(c, l, i * sw + sw / 2, RHS.BH - 10); } }
     }
     c.fillStyle = '#e6c673'; for (let i = 1; i < n; i++) c.fillRect(i * sw - 1.5, RHS.SLOT_Y - 20, 3, RHS.BH);
     for (const p of o.pegs) { c.beginPath(); c.arc(p.x, p.y, RHS.PEG_R, 0, TAU); c.fillStyle = p.c || '#e6dcc0'; c.fill(); if (p.c) { c.lineWidth = 2; c.strokeStyle = '#fff'; c.stroke(); } }
@@ -476,5 +484,5 @@ const RH = (() => {
   const secs = ends => Math.max(0, Math.ceil((ends - now()) / 1000));
 
   function boot() { if (document.fonts) document.fonts.ready.then(() => S && draw()); scenery(); lobby(); connect(); document.querySelectorAll('.orra-inline').forEach(e => e.innerHTML = ORRA); }
-  return { boot, G, h: esc, esc, fmt, fx2, ORRA, orra, now, tone, segWheel, spinPos, drawBoard, track, smooth, coinFlip, coinHtml, secs, toast, FONT, TAU, metal, disc };
+  return { boot, G, h: esc, esc, fmt, fx2, ORRA, orra, now, tone, segWheel, spinPos, drawBoard, track, smooth, coinFlip, coinHtml, secs, toast, FONT, heft, htext, TAU, metal, disc };
 })();
