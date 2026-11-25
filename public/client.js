@@ -52,7 +52,7 @@ const RH = (() => {
   setInterval(() => send({ t: 'ping', c: Date.now() }), 4000);
   function onMsg(m) {
     if (m.t === 'pong') { const rtt = Date.now() - m.c; if (rtt <= bestRtt * 1.5) { bestRtt = Math.min(bestRtt, rtt); off = m.s - (m.c + rtt / 2); } return; }
-    if (m.t === 'hello') { if (!S && 'won' in m) lifeStats(m.won, m.lost); token = m.token; store.set('rh-token', token); send({ t: 'ping', c: Date.now() }); if (roomCode) send({ t: 'join', code: roomCode }); return; }
+    if (m.t === 'hello') { if (!S && 'won' in m) lifeStats(m.won, m.lost, m.bal); token = m.token; store.set('rh-token', token); send({ t: 'ping', c: Date.now() }); if (roomCode) send({ t: 'join', code: roomCode }); return; }
     if (m.t === 'err') { if (!S) { $('lerr').textContent = m.msg; if (/No lobby/.test(m.msg)) roomCode = null; } else { if (/Orra|maximum/.test(m.msg)) { sfx('no_tokens_left'); pendingRepeat = false; } toast(/No lobby/.test(m.msg) ? 'The host left, so this lobby is closed.' : m.msg, 3200, 'bad'); if (/No lobby/.test(m.msg)) { try { sessionStorage.removeItem('rh-room'); } catch {} setTimeout(() => location.href = location.pathname, 3000); } } return; }
     if (m.t === 'catalog') { catalog = m.games; return; }
     if (m.t === 'room') { if (bestRtt > 1e8) off = m.now - Date.now(); onRoom(m); return; }
@@ -63,7 +63,7 @@ const RH = (() => {
   // ---- Lobby screen ----
   // Run settings shown when creating a lobby. Values mirror RUN_OPTS in core.js, which checks them again.
   const RUN = [
-    ['start', 'Starting balance', 'Own wallet uses your saved Orra. A fixed amount gives everyone the same fresh start.', [[0, 'Own wallet'], [500, '500'], [1000, '1K'], [2500, '2.5K'], [5000, '5K'], [10000, '10K']]],
+    ['start', 'Starting balance', 'Own wallet plays with your saved Orra. A fixed amount gives everyone the same fresh start, and part of every win is banked to your wallet.', [[0, 'Own wallet'], [500, '500'], [1000, '1K'], [2500, '2.5K'], [5000, '5K'], [10000, '10K']]],
     ['bet', 'Betting time', 'Seconds to place bets each round.', [5, 8, 12, 15, 20, 30].map(v => [v, v + 's'])],
     ['spin', 'Wheel spin time', 'How long the wheel turns before it lands.', [['short', 'Short 2-4s'], ['normal', 'Normal 3-7s'], ['long', 'Long 6-10s']]],
     ['limit', 'Max bet per round', 'Level limit grows as you level up.', [['level', 'Level limit'], ['none', 'No limit']], 1],
@@ -73,11 +73,11 @@ const RH = (() => {
   ];
   const RUN_DEF = { start: 0, bet: 8, spin: 'normal', limit: 'level', late: 'on', boost: 'on', max: 8 };
   let runCfg = (() => { try { const c = JSON.parse(store.get('rh-cfg') || 'null'); return { ...RUN_DEF, ...(c || {}) }; } catch { return { ...RUN_DEF }; } })();
-  function lifeStats(won, lost) { $('lwon').textContent = fmt(won || 0); $('llost').textContent = fmt(lost || 0); }
+  function lifeStats(won, lost, wallet) { $('lwon').textContent = fmt(won || 0); $('llost').textContent = fmt(lost || 0); $('lwal').textContent = fmt(wallet == null ? 500 : wallet); }
   function lobby() {
     const q = new URLSearchParams(location.search), j = (q.get('join') || '').toUpperCase().slice(0, 4);
     $('nm').value = myName; $('jc').value = j;
-    try { const p = JSON.parse(store.get('rh-prof') || 'null'); if (p) lifeStats(p.won, p.lost); } catch {}
+    try { const p = JSON.parse(store.get('rh-prof') || 'null'); lifeStats(p && p.won, p && p.lost, p && p.bal); } catch {}
     if (j) { $('joinbox').querySelector('h3').textContent = `You are invited to lobby ${j}`; }
     const name = () => { myName = $('nm').value.trim().slice(0, 16); if (!myName) { $('lerr').textContent = 'Enter a name first.'; $('nm').focus(); return false; } store.set('rh-name', myName); send({ t: 'hello', token, name: myName }); return true; };
     const view = v => { $('home').hidden = v !== 'home'; $('setup').hidden = v !== 'setup'; $('lobby').classList.toggle('wide', v === 'setup'); $('lerr').textContent = ''; };
@@ -419,6 +419,7 @@ const RH = (() => {
     const c = S.me.cashier, me = S.me, pct = (a, b) => Math.max(0, Math.min(100, a / b * 100)).toFixed(1) + '%', nolim = me.limit >= 1e9;
     if (c.closed) {
       $('workbody').innerHTML = `<div class="cards"><section class="dcard"><h3>Run balance</h3><p class="stat">${ORRA}${fmt(me.bal - myTot)}</p><p class="note">This run started everyone on ${fmt(S.cfg.start)} Orra. Wages and the daily bonus are paused until you play in a lobby with your own wallet.</p></section>
+ <section class="dcard"><h3>Your wallet</h3><p class="stat">${ORRA}${fmt(me.wallet)}<small>+${fmt(me.banked)} banked this run</small></p><p class="note">Every round you end in profit banks 8% to 30% of it to your saved wallet. Bigger risk and bigger multipliers bank more. The share shrinks as you bank more this run and today, and is halved at a solo table. Your run balance is not affected.</p></section>
  <section class="dcard"><h3>Level ${me.lvl}</h3><p class="stat">${nolim ? 'No limit' : fmt(me.limit)}<small>max bet per round</small></p><div class="meter"><i style="width:${pct(me.xp, me.need)}"></i></div><p class="note">${fmt(me.need - me.xp)} XP to level ${me.lvl + 1}.</p></section></div>`;
       return;
     }
@@ -510,6 +511,7 @@ const RH = (() => {
       if (row && row.stake) msg = `${t.n} pays ${fx2(row.m)}x. You collect ${fmt(row.win)} Orra.`;
       else if (row) msg = `${t.n}. No bet on this field.`;
       if (row && row.lvl) msg += ` Level up! +${row.lvl} Orra.`;
+      if (row && row.bank) msg += ` +${fmt(row.bank)} banked to your wallet.`;
       $('win').textContent = fmt(row ? row.win : 0); $('win').parentNode.classList.toggle('up', !!(row && row.win > 0));
       const key2 = m.round + ':' + key;
       if (row && row.win > 0 && lastWinShown !== key2) { lastWinShown = key2; fanfare(); document.body.classList.add('won'); }
@@ -609,7 +611,7 @@ const RH = (() => {
       const rows = m.results.rows.filter(r => r.stake), mine = rows.find(r => r.id === m.you);
       const pl = id => players[id] || { name: '?', color: '#888' };
       box().insertAdjacentHTML('beforeend', `<div class="final"><div class="fcard"><span class="cat">${CAT_NAMES[m.results.key]}</span><h3>${esc(last ? last.name : 'Bonus')} results</h3>
-        ${mine ? `<p class="mine ${mine.win > 0 ? 'win' : ''}">You finished at ${fx2(mine.m)}x and collect ${orra(mine.win)}</p>` : '<p class="note">You watched this one.</p>'}
+        ${mine ? `<p class="mine ${mine.win > 0 ? 'win' : ''}">You finished at ${fx2(mine.m)}x and collect ${orra(mine.win)}</p>${mine.bank ? `<p class="bank">+${orra(mine.bank)} banked to your wallet</p>` : ''}` : '<p class="note">You watched this one.</p>'}
         <table class="res"><tr><th>Player</th><th class="n">Result</th><th class="n">Stake</th><th class="n">Collect</th></tr>${rows.map(r => `<tr class="${r.id === m.you ? 'me' : ''}"><td><span class="pdot" style="--c:${pl(r.id).color}"></span>${esc(pl(r.id).name)}${r.late ? ' <span class="tag">Late</span>' : ''}</td><td class="n">${fx2(r.m)}x</td><td class="n">${fmt(r.stake)}</td><td class="n">${orra(r.win)}</td></tr>`).join('')}</table>
         <button class="btn go" id="bclose">Back to the table</button></div></div>`);
       const b = $('bclose'); if (b) { b.onclick = close; b.focus(); }

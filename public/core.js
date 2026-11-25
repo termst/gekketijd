@@ -63,6 +63,21 @@ function runCfg(c) {
 const JOIN_MS = 7000, INTRO_MS = 2800, LATE_PAY = 0.6;
 // Late cap as a share of the top backer's stake. Grows with how much of the table backed the field (25% to 50%).
 const lateShare = (backers, online) => Math.min(0.5, 0.25 + 0.25 * backers / Math.max(1, online));
+// Wallet bank: in a run with a fixed starting balance, part of every round you end in profit is saved to the
+// player's own wallet (prof.bal). The run balance and the game itself are never touched.
+// share = base + risk * (part of your run balance you put on the table) + mult * (how big the multiplier was),
+// so 8% for a safe small win up to 30% for an all-in on a big multiplier. Diminishing returns stop farming:
+// the profit is softened past the starting balance (log curve), and the share fades with what you already banked
+// this run and today. Solo tables bank half.
+const BANK = { base: 0.08, risk: 0.12, mult: 0.10, run: 0.5, day: 2000, solo: 0.5 };
+function bankCut(o) {   // o: { net, spent, before, m, start, runBanked, dayBanked, solo }
+  if (!(o.net > 0) || !o.start) return { cut: 0, share: 0 };
+  const risk = Math.min(1, o.spent / Math.max(1, o.before)), mult = Math.min(1, Math.log10(1 + Math.max(0, o.m)) / 2);
+  const share = (BANK.base + BANK.risk * risk + BANK.mult * mult)
+    / (1 + o.runBanked / (BANK.run * o.start)) / (1 + o.dayBanked / BANK.day) * (o.solo ? BANK.solo : 1);
+  const soft = o.start * Math.log(1 + o.net / o.start);
+  return { cut: Math.floor(soft * share), share };
+}
 const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 const round2 = x => Math.round(x * 100) / 100;
 
@@ -194,9 +209,17 @@ class Room {
       let m = stake ? Math.max(0, round2(res[pid] || 0)) : 0;
       if (late) m = round2(m * LATE_PAY);
       else if (stake && this.boost && this.boost.k === key) m = round2(m * this.boost.m);
-      const win = stake ? Math.round(stake * (m + 1)) : 0;
+      const win = stake ? Math.round(stake * (m + 1)) : 0, spent = Object.values(b).reduce((a, x) => a + x, 0);
+      const before = this.bal(p) + spent;   // run balance at the start of the round
       this.add(p, win); wins[pid] = win;
-      rows.push({ id: pid, late, m, stake, win, spent: Object.values(b).reduce((a, x) => a + x, 0), lvl: p.levelUp || 0 });
+      let bank = 0;
+      if (this.cfg.start) {
+        const pr = p.prof, day = dayKey();
+        if (pr.bankDay !== day) { pr.bankDay = day; pr.bankToday = 0; }
+        bank = bankCut({ net: win - spent, spent, before, m, start: this.cfg.start, runBanked: p.banked || 0, dayBanked: pr.bankToday, solo: this.online.length < 2 }).cut;
+        if (bank > 0) { pr.bal += bank; pr.bankToday += bank; pr.banked = (pr.banked || 0) + bank; p.banked = (p.banked || 0) + bank; }
+      }
+      rows.push({ id: pid, late, m, stake, win, spent, bank, lvl: p.levelUp || 0 });
       p.levelUp = 0;
     }
     this.tally(key, wins);
@@ -366,7 +389,7 @@ class Room {
         ready: this.ready.has(p.id), shield: p.prof.items.shield, swap: p.prof.items.swap
       })),
       me: {
-        bal: this.bal(me), lvl: pr.lvl, xp: Math.floor(pr.xp), need: need(pr), limit: this.limit(pr), won: pr.won, lost: pr.lost, items: pr.items, hasLast: !!Object.keys(this.last[pid] || {}).length,
+        bal: this.bal(me), lvl: pr.lvl, xp: Math.floor(pr.xp), need: need(pr), limit: this.limit(pr), won: pr.won, lost: pr.lost, wallet: pr.bal, banked: me.banked || 0, items: pr.items, hasLast: !!Object.keys(this.last[pid] || {}).length,
         cashier: { closed: !!this.cfg.start, rate: rate(pr), cap: cap(pr), pending: pending(pr), work: pr.work, upCost: upCost(pr), today, day: today ? pr.streak : next, gift: 100 + 25 * Math.min(next - 1, 6) }
       }
     };
@@ -375,5 +398,5 @@ class Room {
 }
 
 
-return { rooms, Room, genCode, profile, GAMES, CODE_OK, MAX_PLAYERS, RUN_OPTS, RUN_DEFAULT, runCfg };
+return { rooms, Room, genCode, profile, GAMES, CODE_OK, MAX_PLAYERS, RUN_OPTS, RUN_DEFAULT, runCfg, bankCut, BANK };
 });

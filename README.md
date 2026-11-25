@@ -16,9 +16,19 @@ How it works: everything runs on GitHub Pages, no server or account needed. The 
 Good to know:
 - The host must keep the game tab open. If the host closes it, the lobby ends. Keep the host tab visible: browsers slow down timers in background tabs.
 - Balances, level, items and lifetime Won and Lost totals are saved in each player's own browser (localStorage). Won is the profit on winning fields, Lost is every stake on fields that did not hit.
-- A run with a fixed starting balance gives every player the same fresh balance for that lobby only. Your saved wallet is untouched and the Cashier is closed during that run.
+- A run with a fixed starting balance gives every player the same fresh balance for that lobby only. The Cashier is closed during that run. Your wallet only grows: every round you end in profit banks part of it to your saved wallet (see below). The run balance and the game are not affected.
 - The chip stack badge between each group of 4 tickets bets the selected chip on all 4 fields. Other players' bets show on each ticket as their colour token, the first 2 letters of their name and the amount.
 - Some strict networks (school, office, some mobile carriers) block peer to peer connections. Then try another network or a phone hotspot.
+
+## Wallet bank (fixed balance runs)
+
+Own wallet is your saved Orra (the Wallet total on the start screen), fed by the Cashier and by Own wallet runs. In a run with a fixed starting balance, each round you end in profit (collect minus everything you bet that round) banks a share to that wallet:
+
+- Share: 8% base, plus up to 12% for risk (part of your run balance you bet that round), plus up to 10% for the multiplier (`log10(1 + m) / 2`). So 8% to 30%.
+- Profit past the starting balance is softened: `start * ln(1 + profit / start)`.
+- The share fades with what you banked this run (`1 / (1 + banked / (0.5 * start))`) and today (`1 / (1 + today / 2000)`), and is halved at a solo table.
+
+Tuning lives in `BANK` and `bankCut` in `public/core.js`.
 
 ## Bonus games: backers and late buy-ins
 
