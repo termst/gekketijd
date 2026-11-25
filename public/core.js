@@ -39,6 +39,11 @@ function genCode() { let c; do { c = ''; for (let i = 0; i < 4; i++) c += CODE_C
 const COLORS = ['#e8443a', '#3a8ee8', '#3ac46e', '#e8b23a', '#b45ae8', '#3ad6d6', '#e85aa8', '#a8d63a'];
 const MAX_PLAYERS = 8;
 const BET_MS = 8000;
+// Buy-in window: when the wheel lands on a bonus field, players who did not back it can buy in late.
+// Backers keep the edge: full multiplier, Prime Minute boost, an Edge Shield and the first turns.
+const JOIN_MS = 7000, INTRO_MS = 2800, LATE_PAY = 0.6;
+// Late cap as a share of the top backer's stake. Grows with how much of the table backed the field (25% to 50%).
+const lateShare = (backers, online) => Math.min(0.5, 0.25 + 0.25 * backers / Math.max(1, online));
 const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 const round2 = x => Math.round(x * 100) / 100;
 
@@ -46,7 +51,7 @@ class Room {
   constructor(code) {
     this.code = code; this.players = new Map(); this.phase = 'betting'; this.ends = 0; this.bets = {}; this.ready = new Set();
     this.boost = null; this.hist = []; this.dry = 0; this.spin = null; this.bonus = null; this.msg = ''; this.timer = null;
-    this.last = {}; this.results = null; this.round = 0; this.force = null; this.idle = null;
+    this.last = {}; this.results = null; this.late = new Set(); this.passed = new Set(); this.spent = {}; this.round = 0; this.force = null; this.idle = null;
   }
   get online() { return [...this.players.values()].filter(p => p.conn && p.conn.open); }
   join(conn, token, name) {
@@ -93,12 +98,12 @@ class Room {
   closeBets() {
     if (this.phase !== 'betting') return;
     clearTimeout(this.timer); this.timer = null;
-    this.stakes = {};
+    this.stakes = {}; this.spent = {}; this.late = new Set();
     for (const p of this.players.values()) {
       const b = this.bets[p.id]; if (!b) continue;
       const tot = Object.values(b).reduce((a, x) => a + x, 0);
       if (!tot || tot > p.prof.bal || tot > limit(p.prof)) continue;
-      p.prof.bal -= tot; p.levelUp = gainXp(p.prof, tot);
+      p.prof.bal -= tot; p.levelUp = gainXp(p.prof, tot); this.spent[p.id] = tot;
       this.stakes[p.id] = { ...b }; this.last[p.id] = { ...b };
     }
     saveSoon();
@@ -137,9 +142,13 @@ class Room {
     let pool = GAMES[key], g = pool[Math.floor(Math.random() * pool.length)];
     if (this.force && this.force.game && GAME_BY_ID[this.force.game]) g = GAME_BY_ID[this.force.game];
     this.force = null;
+    const on = this.online.filter(p => !ids.includes(p.id));
+    const top = Math.max(...ids.map(pid => this.stakes[pid][key])), share = lateShare(ids.length, ids.length + on.length);
     this.msg = `${t.n}: ${g.name}`;
-    this.phase = 'intro'; this.nextGame = { id: g.id, name: g.name, cat: key, rules: g.rules };
-    this.after(2800, () => this.startBonus(key, g, ids));
+    this.phase = 'intro'; this.nextGame = { id: g.id, name: g.name, cat: key, rules: g.rules, top, share, backers: ids };
+    this.passed = new Set();
+    this.go = () => this.startBonus(key, g, ids.concat([...this.late].filter(pid => this.players.has(pid))));
+    this.after(on.length ? JOIN_MS : INTRO_MS, this.go);
     this.broadcast();
   }
   // res: { pid: multiplier }. Pays stake * (m * boost + 1), as in the base game.
@@ -148,11 +157,13 @@ class Room {
     for (const [pid, b] of Object.entries(this.stakes)) {
       const p = this.players.get(pid); if (!p) continue;
       const stake = b[key] || 0;
+      const late = this.late.has(pid);
       let m = stake ? Math.max(0, round2(res[pid] || 0)) : 0;
-      if (stake && this.boost && this.boost.k === key) m = round2(m * this.boost.m);
+      if (late) m = round2(m * LATE_PAY);
+      else if (stake && this.boost && this.boost.k === key) m = round2(m * this.boost.m);
       const win = stake ? Math.round(stake * (m + 1)) : 0;
       p.prof.bal += win;
-      rows.push({ id: pid, m, stake, win, spent: Object.values(b).reduce((a, x) => a + x, 0), lvl: p.levelUp || 0 });
+      rows.push({ id: pid, late, m, stake, win, spent: Object.values(b).reduce((a, x) => a + x, 0), lvl: p.levelUp || 0 });
       p.levelUp = 0;
     }
     rows.sort((a, b) => b.win - a.win);
@@ -162,12 +173,32 @@ class Room {
     this.broadcast();
   }
 
+  // Most a non-backer may buy in for: a share of the top stake, within balance and the level limit left this round.
+  lateCap(p) {
+    const n = this.nextGame;
+    if (this.phase !== 'intro' || !n || n.backers.includes(p.id) || this.late.has(p.id) || this.passed.has(p.id)) return 0;
+    const c = Math.min(Math.max(5, Math.floor(n.top * n.share / 5) * 5), p.prof.bal, limit(p.prof) - (this.spent[p.id] || 0));   // never below one 5 chip
+    return Math.max(0, c >= 5 ? Math.floor(c / 5) * 5 : 0);
+  }
+
+  // Start early once every online non-backer has bought in or chosen to watch.
+  joinCheck() {
+    const n = this.nextGame;
+    if (this.phase !== 'intro' || !n) return;
+    const open = this.online.filter(p => !n.backers.includes(p.id) && this.lateCap(p));
+    if (!open.length && Date.now() < this.ends - 1200) this.after(1200, this.go);
+  }
+
   // ---- Bonus host ----
   startBonus(key, mod, ids) {
     const room = this, timers = new Set();
     let done = false;
     const P = pid => room.players.get(pid);
-    const inst = { id: mod.id, name: mod.name, cat: key, rules: mod.rules, log: [], ends: 0, ids };
+    // Turn order: backers first, biggest stake first, then late joiners.
+    const stakeOf = pid => (room.stakes[pid] && room.stakes[pid][key]) || 0;
+    ids = ids.slice().sort((a, b) => (room.late.has(a) - room.late.has(b)) || stakeOf(b) - stakeOf(a));
+    const edge = new Set(ids.filter(pid => !room.late.has(pid)));   // one free block per backer, this game only
+    const inst = { id: mod.id, name: mod.name, cat: key, rules: mod.rules, log: [], ends: 0, ids, edge };
     const ctx = {
       ids: ids.slice(),
       rand: Math.random,
@@ -178,7 +209,9 @@ class Room {
       color: pid => (P(pid) ? P(pid).color : '#888'),
       online: pid => !!(P(pid) && P(pid).conn && P(pid).conn.open),
       balance: pid => (P(pid) ? P(pid).prof.bal : 0),
-      stake: pid => (room.stakes[pid] && room.stakes[pid][key]) || 0,
+      stake: stakeOf,
+      backer: pid => ids.includes(pid) && !room.late.has(pid),
+      late: pid => room.late.has(pid),
       now: () => Date.now(),
       push: () => room.pushBonus(),
       after(ms, fn) { const t = setTimeout(() => { timers.delete(t); if (!done) { try { fn(); } catch (e) { console.error(e); } } }, ms); timers.add(t); return t; },
@@ -192,6 +225,7 @@ class Room {
       // Targeted attacks pass through this. A Shield blocks the next attack and is used up.
       attack(from, to, label) {
         if (from === to || !P(to)) return true;
+        if (edge.has(to) && room.late.has(from)) { edge.delete(to); ctx.push(); ctx.log(`${ctx.name(to)}'s Edge Shield blocks ${label} from ${ctx.name(from)}`); return false; }
         const it = ctx.items(to);
         if (it.shield > 0) { it.shield--; saveSoon(); ctx.log(`${ctx.name(to)}'s Shield blocks ${label} from ${ctx.name(from)}`); return false; }
         return true;
@@ -223,7 +257,7 @@ class Room {
       p.conn.send({
         t: 'bonus', id: b.id, name: b.name, cat: b.cat, rules: b.rules, ends: b.ends, now: Date.now(), log: b.log,
         me: p.id, part: b.ids.includes(p.id),
-        players: b.ids.map(id => { const q = this.players.get(id); return { id, name: q ? q.name : '?', color: q ? q.color : '#888', shield: q ? q.prof.items.shield : 0, swap: q ? q.prof.items.swap : 0, stake: (this.stakes[id] || {})[b.cat] || 0 }; }),
+        players: b.ids.map(id => { const q = this.players.get(id); return { id, name: q ? q.name : '?', color: q ? q.color : '#888', shield: q ? q.prof.items.shield : 0, edge: b.edge.has(id), late: this.late.has(id), swap: q ? q.prof.items.swap : 0, stake: (this.stakes[id] || {})[b.cat] || 0 }; }),
         v
       });
     }
@@ -254,6 +288,19 @@ class Room {
       if (this.phase !== 'betting') return;
       this.ready.add(p.id); this.broadcast(); return this.checkReady();
     }
+    if (m.t === 'buyin') {
+      if (m.pass) { if (this.lateCap(p)) { this.passed.add(p.id); this.broadcast(); this.joinCheck(); } return; }
+      const amt = Math.floor(+m.amt / 5) * 5, cap = this.lateCap(p);
+      if (!cap) return;
+      if (!(amt >= 5)) return;
+      if (amt > cap) return p.conn.send({ t: 'err', msg: `You can buy in for at most ${cap} Orra.` });
+      const key = this.nextGame.cat;
+      pr.bal -= amt; p.levelUp = (p.levelUp || 0) + gainXp(pr, amt);
+      this.spent[p.id] = (this.spent[p.id] || 0) + amt;
+      this.stakes[p.id] = { ...(this.stakes[p.id] || {}), [key]: amt };
+      this.late.add(p.id); saveSoon();
+      this.broadcast(); return this.joinCheck();
+    }
     if (m.t === 'act') {
       if (this.bonus && this.bonus.ids.includes(p.id)) { try { this.bonus.game.act(p.id, m.a || {}); } catch (e) { console.error(e); } }
       return;
@@ -274,7 +321,7 @@ class Room {
     return {
       t: 'room', code: this.code, you: pid, dev: DEV, prof: pr, phase: this.phase, ends: this.ends, now: Date.now(), round: this.round,
       boost: this.boost, hist: this.hist, msg: this.msg, spin: this.spin, landed: this.phase === 'betting' ? null : this.landedKey,
-      next: this.phase === 'intro' ? this.nextGame : null, results: this.phase === 'payout' || this.phase === 'landed' ? this.results : null,
+      next: this.phase === 'intro' ? { ...this.nextGame, cap: this.lateCap(me), passed: this.passed.has(pid), late: [...this.late], latePay: LATE_PAY } : null, results: this.phase === 'payout' || this.phase === 'landed' ? this.results : null,
       players: [...this.players.values()].map(p => ({
         id: p.id, name: p.name, color: p.color, online: !!(p.conn && p.conn.open), bal: p.prof.bal, lvl: p.prof.lvl,
         bets: this.phase === 'betting' ? (this.bets[p.id] || {}) : ((this.stakes || {})[p.id] || {}),

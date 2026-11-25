@@ -23,10 +23,11 @@ function bot(i) {
       if (m.phase === 'betting' && m.round !== round) {
         round = m.round;
         if (force && i === 0) send({ t: 'force', key: CAT[force], game: force });
-        const key = force ? CAT[force] : pick(['one', 'three', 'spare', 'grab', 'drop', 'prod']);
+        const key = force ? CAT[force] : pick(['one', 'two', 'spare', 'grab', 'drop', 'prod']);
         setTimeout(() => { send({ t: 'bet', key, amt: 5 }); setTimeout(() => send({ t: 'ready' }), 300 + R(1500)); }, 200 + R(800));
       }
     }
+    if (m.t === 'room' && m.phase === 'intro' && m.next && m.next.cap) setTimeout(() => send(Math.random() < 0.6 ? { t: 'buyin', amt: 5 * (1 + R(m.next.cap / 5)) } : { t: 'buyin', pass: true }), 300 + R(2000));
     if (m.t === 'bonus') { lastB = m.part ? m : null; if (m.part) play(m); }
     if (m.t === 'room' && m.phase !== 'bonus') lastB = null;
   };

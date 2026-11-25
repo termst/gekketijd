@@ -1,3 +1,4 @@
+@font-face{font-family:"Escargoth";src:url(fonts/escargoth.ttf) format("truetype");font-display:swap}
 *{box-sizing:border-box;margin:0}
 :root{
  --ink:#120806;--panel:#1d100b;--panel2:#2a170f;--panel3:#3a2216;--line:#8a6c32;--line2:#8a6c3266;
@@ -7,7 +8,7 @@
  --ease:cubic-bezier(.2,.8,.2,1);--accent:var(--gold)
 }
 html,body{min-height:100%}
-body{min-height:100vh;min-height:100dvh;background:var(--ink);color:var(--pearl);font:500 15px/1.35 "Roboto Condensed","Arial Narrow",Arial,sans-serif;display:flex;flex-direction:column;overflow-x:hidden;-webkit-font-smoothing:antialiased}
+body{min-height:100vh;min-height:100dvh;background:var(--ink);color:var(--pearl);font:500 15px/1.35 "Escargoth","Arial Narrow",Arial,sans-serif;display:flex;flex-direction:column;overflow-x:hidden;-webkit-font-smoothing:antialiased}
 button{font:inherit;color:inherit;border:0;cursor:pointer;background:none}
 button:disabled{cursor:default}
 button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:3px solid #8fe9ff;outline-offset:2px}
@@ -199,6 +200,13 @@ canvas.gc{max-width:100%;display:block;margin:auto;touch-action:none;border-radi
 .intro h2{font-size:44px!important;line-height:1}
 .badge{display:inline-block;padding:6px 14px;border-radius:999px;font-weight:700;font-size:14px;letter-spacing:.5px}
 .badge.in{background:var(--metal);color:#1c0f0a}
+.badge.late{background:#c98a1e;color:#1c0f0a}
+.buyin{display:grid;gap:8px;justify-items:center;background:#0008;border-radius:var(--r);box-shadow:inset 0 0 0 1px var(--accent);padding:12px 16px;width:min(520px,100%)}
+.buyin .bihead small{color:var(--mute)}
+.buyin .birow{display:flex;gap:10px;align-items:center;width:100%;justify-content:center}
+.buyin input[type=range]{flex:1;accent-color:var(--accent)}
+.buyin #bival{min-width:70px;text-align:right}
+.buyin .note{font-size:12px;text-align:center}
 .badge.watch{background:#0008;color:var(--mute);box-shadow:inset 0 0 0 1px var(--line2)}
 .intro .brules{background:#0006;border-radius:var(--r);padding:12px 16px 12px 34px;font-size:15px;width:min(640px,100%)}
 .intro .bt{width:min(420px,90%)}
