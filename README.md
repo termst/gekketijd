@@ -18,6 +18,8 @@ Good to know:
 - Balances, level, items and lifetime Won and Lost totals are saved in each player's own browser (localStorage). Won is the profit on winning fields, Lost is every stake on fields that did not hit.
 - A run with a fixed starting balance gives every player the same fresh balance for that lobby only. Your saved wallet is untouched and the Cashier is closed during that run.
 - The chip stack badge between each group of 4 tickets bets the selected chip on all 4 fields. Other players' bets show on each ticket as their colour token, the first 2 letters of their name and the amount.
+- Your wallet (saved Orra) shows on the home screen next to Won and Lost, and in the game header. In fixed balance runs it stays separate from the run balance and grows with the saved share of your wins.
+- The speaker button cycles full volume, 45% (one wave) and mute. The choice is remembered.
 - Some strict networks (school, office, some mobile carriers) block peer to peer connections. Then try another network or a phone hotspot.
 
 ## Battle mode
@@ -39,14 +41,17 @@ The lobby opens in a waiting room. The host (lobby creator, or the next online p
 
 The wheel pays 1, 2, 5 and 10 to 1 on the number fields.
 
-When the wheel lands on a bonus field, players who bet on it (backers) always play. Everyone else online gets a 7 second buy-in window:
+When the wheel lands on a bonus field, players who bet on it (backers) always play.
+
+Briefing: there is no clock before a bonus game. Everyone reads the game and its rules at their own pace. Backers and late joiners press **Ready**, everyone else picks **Buy in and ready** or **Watch**. The player list shows who is Ready, Reading or Deciding. Once everyone is ready the game starts after a 1.5 s count-in. The host (lobby creator, or the next online player if they leave) has a **Start now** button to skip the wait; undecided players then watch. A 5 minute failsafe (`BRIEF_MAX`) only stops a lobby where everyone walked away from hanging.
+
+Non-backers can buy in late during the briefing:
 
 - Late cap: 25% to 50% of the top backer's stake (`0.25 + 0.25 * backers / players`), never below one 5 chip, within balance and the level limit left this round.
 - Late joiners collect 60% of their multiplier and get no Prime Minute boost.
 - Backers move first (biggest stake first) and get an Edge Shield that blocks the first attack from a late joiner, without using up a real Shield.
-- The window closes early once every eligible player has bought in or pressed Watch.
 
-Tuning lives at the top of `public/core.js` (`JOIN_MS`, `LATE_PAY`, `lateShare`). Subgames can read `ctx.backer(pid)` and `ctx.late(pid)` for game specific edges.
+Tuning lives at the top of `public/core.js` (`GO_MS`, `BRIEF_MAX`, `LATE_PAY`, `lateShare`). Subgames can read `ctx.backer(pid)` and `ctx.late(pid)` for game specific edges.
 
 ## Wheel weighting
 
@@ -68,6 +73,9 @@ Example, 4 bettors: 3 on Ten holding 60% of the Orra. Ten weight = 1 - 0.12 x 0.
 - Depth: closer means bigger, a longer and softer shadow, and the front HUD layer. Further means smaller, blurred, and under the HUD (`deep` under everything, `mid` over the wheel but under the table and header, `front` over all).
 - Wheel: each spin picks one of 4 corners and a force (flick, easy, firm, heave, monster). The force sets the wheel's turns and curve, the grip style, the wind up (the wheel is dragged back a little) and the follow through. The server still decides where the wheel lands and when.
 - Reactions: round start, bets, refused bets, ready, win, big win, loss, no bet, bonus landing, minigame win, minigame loss (middle finger, 5 deliveries), level up, players joining or leaving. Each has several gestures; idle has 18 behaviours (drift, prowl, creep, peek, drum, knuckle crack, knock on the screen, inspect, orbit, loom, shadowbox, count, conduct, thumb twiddle, rest, weave through the HUD, stretch, two finger stroll). Gestures include coin flip, chef's kiss, rock on, shaka, table slam, sweep, hurry up twirl, gun twirl with holster, fingers crossed (while the wheel spins) and a dizzy wobble after monster spins.
+- Cursor: the glove makes room when the cursor comes near (it drifts aside and turns see-through while the cursor is on it), sometimes follows the cursor with a pointing finger, and offers a high five (click the open palm within 1.8 s). Click the hand to poke it: it flinches, three pokes in 6 s earn a scolding.
+- Fast moves get cartoon squash and stretch plus two fading smear ghosts. Off screen the glove skips drawing.
+- Briefing: a thumbs up when you press Ready, a drumroll when everyone is ready, and now and then a patient point at your Ready button.
 - Anti repetition: every pick (behaviour, gesture, corner, force, grip, path, screen spot) is weighted against its recent history.
 - Punches only spawn impact particles. Reduced motion settings get a calm glove and normal wheel spins.
 - Try a gesture from the browser console: `Glove._run('middleJab')`, `Glove._run('knock')`, `Glove._run('creep')`, `Glove._run('coinFlip')`.

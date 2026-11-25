@@ -19,7 +19,11 @@ const RH = (() => {
 
   // ---- Sound ----
   // Samples and synth blips both run through Sfx (sfx.js): variant shuffle, pitch/level spread, soft fades.
-  let sound = store.get('rh-sound') !== 'off'; Sfx.on = sound;
+  // Three levels, cycled by the speaker button: full, low (45%), mute.
+  const SND = { on: 1, low: .45, off: 0 }, SND_NEXT = { on: 'low', low: 'off', off: 'on' };
+  let sndMode = SND[store.get('rh-sound')] !== undefined ? store.get('rh-sound') : 'on';
+  const applySnd = () => { Sfx.on = sndMode !== 'off'; Sfx.vol = SND[sndMode] || 1; };
+  applySnd();
   const tone = (f, d = .08, v = .05) => Sfx.tone(f, d, v);
   const sfx = (n, v = .8, o = {}) => Sfx.play(n, { vol: v / .8, ...o });
   // Urgent countdown: one tick per second over the last n seconds. It escalates: woodblock first, tighter and louder,
@@ -39,7 +43,7 @@ const RH = (() => {
       if (sec === 1) { Sfx.play('tick-modern', { vol: vol * 1.05, force: true }); Sfx.play('tick-wood', { vol: vol * .5, rate: 1.18, pan, force: true }); }
     };
   };
-  const betTick = countdown(), buyTick = countdown(), bonusTick = countdown();
+  const betTick = countdown(), bonusTick = countdown();
 
   // ---- Connection ----
   let ws = null, token = store.get('rh-token') || '', myName = store.get('rh-name') || '', roomCode = null, off = 0, bestRtt = 1e9;
@@ -55,7 +59,7 @@ const RH = (() => {
   setInterval(() => send({ t: 'ping', c: Date.now() }), 4000);
   function onMsg(m) {
     if (m.t === 'pong') { const rtt = Date.now() - m.c; if (rtt <= bestRtt * 1.5) { bestRtt = Math.min(bestRtt, rtt); off = m.s - (m.c + rtt / 2); } return; }
-    if (m.t === 'hello') { if (!S && 'won' in m) lifeStats(m.won, m.lost); token = m.token; store.set('rh-token', token); send({ t: 'ping', c: Date.now() }); if (roomCode) send({ t: 'join', code: roomCode }); return; }
+    if (m.t === 'hello') { if (!S && 'won' in m) lifeStats(m.won, m.lost, m.bal); token = m.token; store.set('rh-token', token); send({ t: 'ping', c: Date.now() }); if (roomCode) send({ t: 'join', code: roomCode }); return; }
     if (m.t === 'err') { if (!S) { $('lerr').textContent = m.msg; if (/No lobby/.test(m.msg)) roomCode = null; } else { if (/Orra|maximum/.test(m.msg)) { sfx('no_tokens_left'); pendingRepeat = false; } toast(/No lobby/.test(m.msg) ? 'The host left, so this lobby is closed.' : m.msg, 3200, 'bad'); if (/No lobby/.test(m.msg)) { try { sessionStorage.removeItem('rh-room'); } catch {} setTimeout(() => location.href = location.pathname, 3000); } } return; }
     if (m.t === 'catalog') { catalog = m.games; return; }
     if (m.t === 'room') { if (bestRtt > 1e8) off = m.now - Date.now(); onRoom(m); return; }
@@ -92,11 +96,11 @@ const RH = (() => {
     if (c.mode === 'battle') return `${short(c.stack)} each, first to <b>${short(c.stack * c.target)}</b> wins. Ante starts at ${anteNow(c)} and climbs every ${STORM_EVERY[c.storm]} rounds. Up to ${c.max} players.`;
     return `${c.start ? short(c.start) + ' each' : 'Own wallet'}, ${c.limit === 'none' ? 'no bet limit' : 'level bet limit'}, ${c.bet}s to bet, ${spin} spins. Up to ${c.max} players.`;
   }
-  function lifeStats(won, lost) { $('lwon').textContent = fmt(won || 0); $('llost').textContent = fmt(lost || 0); }
+  function lifeStats(won, lost, bal) { $('lwon').textContent = fmt(won || 0); $('llost').textContent = fmt(lost || 0); if (typeof bal === 'number') $('lwal').textContent = fmt(bal); }
   function lobby() {
     const q = new URLSearchParams(location.search), j = (q.get('join') || '').toUpperCase().slice(0, 4);
     $('nm').value = myName; $('jc').value = j;
-    try { const p = JSON.parse(store.get('rh-prof') || 'null'); if (p) lifeStats(p.won, p.lost); } catch {}
+    try { const p = JSON.parse(store.get('rh-prof') || 'null'); if (p) lifeStats(p.won, p.lost, p.bal); } catch {}
     if (j) { $('joinbox').querySelector('h3').textContent = `You are invited to lobby ${j}`; }
     const name = () => { myName = $('nm').value.trim().slice(0, 16); if (!myName) { $('lerr').textContent = 'Enter a name first.'; $('nm').focus(); return false; } store.set('rh-name', myName); send({ t: 'hello', token, name: myName }); return true; };
     const view = v => { $('home').hidden = v !== 'home'; $('setup').hidden = v !== 'setup'; $('lobby').classList.toggle('wide', v === 'setup'); $('lerr').textContent = ''; };
@@ -433,12 +437,17 @@ const RH = (() => {
     $('go').onclick = () => { send({ t: 'ready' }); tone(660, .15); if (G_) G_.emit('ready'); };
     $('help').onclick = () => { rulesDialog(); $('rules').showModal(); };
     $('shop').onclick = () => { shop(); $('work').showModal(); };
-    // Speaker icon with waves (on) or with a cross (off)
+    // Speaker icon: two waves (full), one wave (45%), a cross (mute). Click cycles full > 45% > mute > full.
     const SPK = '<path d="M3.5 9.2h3.6L12 5v14l-4.9-4.2H3.5z" fill="currentColor" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>';
-    const ICON_ON = `<svg viewBox="0 0 24 24" aria-hidden="true">${SPK}<path d="M15.2 9.1a4.2 4.2 0 0 1 0 5.8M17.8 6.6a7.8 7.8 0 0 1 0 10.8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`;
-    const ICON_OFF = `<svg viewBox="0 0 24 24" aria-hidden="true">${SPK}<path d="M15.6 9.4l5.2 5.2M20.8 9.4l-5.2 5.2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`;
-    const sndLabel = () => { const b = $('snd'); b.innerHTML = sound ? ICON_ON : ICON_OFF; b.setAttribute('aria-pressed', sound); b.setAttribute('aria-label', sound ? 'Sound on, click to mute' : 'Sound off, click to unmute'); b.title = sound ? 'Mute' : 'Unmute'; b.classList.toggle('muted', !sound); };
-    sndLabel(); $('snd').onclick = () => { sound = !sound; Sfx.on = sound; store.set('rh-sound', sound ? 'on' : 'off'); sndLabel(); if (sound) sfx('token_place', .5); };
+    const WAVE = (d, o = 1) => `<path d="${d}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="${o}"/>`;
+    const SND_ICON = {
+      on: `<svg viewBox="0 0 24 24" aria-hidden="true">${SPK}${WAVE('M15.2 9.1a4.2 4.2 0 0 1 0 5.8')}${WAVE('M17.8 6.6a7.8 7.8 0 0 1 0 10.8')}</svg>`,
+      low: `<svg viewBox="0 0 24 24" aria-hidden="true">${SPK}${WAVE('M15.2 9.1a4.2 4.2 0 0 1 0 5.8')}${WAVE('M17.8 6.6a7.8 7.8 0 0 1 0 10.8', .22)}</svg>`,
+      off: `<svg viewBox="0 0 24 24" aria-hidden="true">${SPK}${WAVE('M15.6 9.4l5.2 5.2M20.8 9.4l-5.2 5.2')}</svg>`
+    };
+    const SND_TXT = { on: ['Sound 100%', 'Sound on, click for 45% volume'], low: ['Sound 45%', 'Sound at 45%, click to mute'], off: ['Muted', 'Sound off, click for full volume'] };
+    const sndLabel = () => { const b = $('snd'); b.innerHTML = SND_ICON[sndMode]; b.setAttribute('aria-pressed', sndMode !== 'off'); b.setAttribute('aria-label', SND_TXT[sndMode][1]); b.title = SND_TXT[sndMode][0]; b.classList.toggle('muted', sndMode === 'off'); b.classList.toggle('low', sndMode === 'low'); };
+    sndLabel(); $('snd').onclick = () => { sndMode = SND_NEXT[sndMode]; applySnd(); store.set('rh-sound', sndMode); sndLabel(); if (sndMode !== 'off') sfx('token_place', .5); toast(SND_TXT[sndMode][0], 1200); };
     ['rules', 'work'].forEach(id => $(id).onclick = e => { if (e.target === $(id)) $(id).close(); });
     $('invite').onclick = () => {
       const link = location.origin + location.pathname + '?join=' + S.code;
@@ -570,6 +579,10 @@ const RH = (() => {
       h.classList.toggle('hit', m.phase !== 'betting' && m.phase !== 'spinning' && m.landed === k);
     });
     $('bal').textContent = fmt(m.me.bal - (betting ? tot : 0)); $('bet').textContent = fmt(tot);
+    // Wallet chip: own wallet lobbies play straight from it (open bets already held back), fixed runs leave it untouched.
+    const wal = m.me.wallet - (m.cfg.start ? 0 : betting ? tot : 0), wEl = $('wal'), wOld = +wEl.dataset.v;
+    if (wOld !== wal) { wEl.textContent = fmt(wal); wEl.dataset.v = wal; const ch = $('walchip'); if (!isNaN(wOld) && wal > wOld) { ch.classList.remove('up'); void ch.offsetWidth; ch.classList.add('up'); } }
+    $('walchip').title = m.cfg.start ? 'Your own wallet. This run uses its own balance, part of each win is saved here.' : 'Your own wallet. This lobby plays from it.';
     $('clear').disabled = !betting || ready || !tot; $('again').disabled = !betting || ready || !m.me.hasLast;
     $('go').disabled = !betting || ready; $('go').textContent = out ? 'Out' : betting ? (ready ? 'Waiting' : tot ? 'Ready' : 'Sit out') : m.phase === 'spinning' ? 'Spinning' : 'Wait';
     document.querySelectorAll('.coin').forEach(b => { b.disabled = !betting || ready; b.classList.toggle('short', betting && +b.dataset.v > m.me.bal - tot); });
@@ -696,39 +709,60 @@ const RH = (() => {
     const box = () => $('box');
     const rulesList = rules => `<ul class="brules">${rules.map(ruleLi).join('')}</ul>`;
     const accent = cat => box().style.setProperty('--accent', ACCENT[cat] || 'var(--gold)');
-    // Intro doubles as the buy-in window. Built once per round, then patched so the slider keeps its value.
-    let introKey = '', buyWin = null;
+    // Intro is the briefing: no clock. Everyone who plays (or may still buy in) reads the rules and presses Ready.
+    // The host can start early. Built once per round, then patched so the slider and scroll position stay put.
+    let introKey = '', introGo = false;
     function intro(m) {
       const n = m.next, k = m.round + ':' + n.id, backer = n.backers.includes(m.you), late = n.late.includes(m.you);
+      const isHost = m.host === m.you, waiting = n.wait.includes(m.you), ready = n.ready.includes(m.you);
       accent(n.cat);
-      buyWin = n.cap ? { k, ends: m.ends, can: () => { const b = box().querySelector('.badge'); return !!b && b.classList.contains('watch'); } } : null;
       if (introKey !== k) {
-        introKey = k; cur = null; last = null;
-        const dur = Math.max(500, m.ends - now());
+        introKey = k; cur = null; last = null; introGo = false;
         box().innerHTML = `<div class="intro"><span class="cat">${CAT_NAMES[n.cat]}</span><h2>${esc(n.name)}</h2>
-          <span class="badge"></span><div class="buyin" hidden></div>
-          ${rulesList(n.rules)}<div class="bplayers"></div><div class="bt" style="--dur:${dur}ms"><i></i></div></div>`;
+          <span class="badge"></span>${rulesList(n.rules)}<div class="buyin" hidden></div>
+          <div class="bplayers"></div><p class="bwait" role="status" aria-live="polite"></p>
+          <div class="iacts"><button class="btn go" id="bready">Ready</button><button class="btn" id="bskip" title="Host: start without waiting">Start now</button></div><div class="bt go" hidden><i></i></div></div>`;
         $('bonus').classList.add('on'); Sfx.play('game-show', { delay: Math.max(0, 500 - (performance.now() - landAt)) });
+        $('bready').onclick = () => { send({ t: 'bready' }); tone(660, .12); if (G_) G_.emit('briefReady'); };
+        $('bskip').onclick = () => { send({ t: 'bskip' }); tone(520, .12); };
         if (n.cap) {
           const bx = box().querySelector('.buyin'), start = Math.min(n.cap, Math.max(5, Math.round(n.cap / 2 / 5) * 5));
           bx.hidden = false;
           bx.innerHTML = `<p class="bihead">Buy in, max <b>${orra(n.cap)}</b> <small>(${Math.round(n.share * 100)}% of top stake ${orra(n.top)})</small></p>
             <div class="birow"><input type="range" id="biamt" min="5" max="${n.cap}" step="5" value="${start}" aria-label="Buy-in amount"><b id="bival">${orra(start)}</b></div>
-            <div class="birow"><button class="btn go" id="bigo">Buy in</button><button class="btn" id="bipass">Watch</button></div>
+            <div class="birow"><button class="btn go" id="bigo">Buy in and ready</button><button class="btn" id="bipass">Watch</button></div>
             <p class="note">Late: ${Math.round(n.latePay * 100)}% of your multiplier, no Prime Minute, you go after backers, their Edge Shields block your first attack.</p>`;
           const r = $('biamt');
           r.oninput = () => { $('bival').innerHTML = orra(+r.value); tone(520 + +r.value / n.cap * 300, .03, .02); };
-          $('bigo').onclick = () => { send({ t: 'buyin', amt: +r.value }); sfx('token_place'); };
+          $('bigo').onclick = () => { send({ t: 'buyin', amt: +r.value }); sfx('token_place'); if (G_) G_.emit('briefReady'); };
           $('bipass').onclick = () => send({ t: 'buyin', pass: true });
         }
+        const f = box().querySelector(n.cap ? '#bigo' : '#bready'); if (f && (backer || n.cap)) setTimeout(() => f.focus({ preventScroll: true }), 50);
       }
       const bx = box().querySelector('.buyin');
       if (bx && !n.cap) bx.hidden = true;
       const badge = box().querySelector('.badge');
       badge.className = 'badge ' + (backer ? 'in' : late ? 'in late' : 'watch');
       badge.textContent = backer ? 'Backer: full edge' : late ? 'Bought in late' : n.cap ? 'Not backed: buy in or watch' : 'Spectating';
-      box().querySelector('.bplayers').innerHTML = m.players.filter(p => p.bets[n.cat]).sort((a, b) => n.late.includes(a.id) - n.late.includes(b.id) || b.bets[n.cat] - a.bets[n.cat])
-        .map(p => `<span class="bp ${p.id === m.you ? 'me' : ''}" style="--c:${p.color}"><i></i>${esc(p.name)}<small>${ORRA}${fmt(p.bets[n.cat])}</small><span class="tag ${n.late.includes(p.id) ? '' : 'ok'}">${n.late.includes(p.id) ? 'Late' : 'Backer'}</span></span>`).join('');
+      // Who plays and who the game waits for
+      const inGame = id => n.backers.includes(id) || n.late.includes(id);
+      const rows = m.players.filter(p => inGame(p.id) || n.wait.includes(p.id))
+        .sort((a, b) => inGame(b.id) - inGame(a.id) || n.late.includes(a.id) - n.late.includes(b.id) || (b.bets[n.cat] || 0) - (a.bets[n.cat] || 0));
+      box().querySelector('.bplayers').innerHTML = rows.map(p => {
+        const st = n.ready.includes(p.id) ? '<span class="tag ok">Ready</span>' : !p.online ? '<span class="tag">Away</span>' : inGame(p.id) ? '<span class="tag rd">Reading</span>' : '<span class="tag rd">Deciding</span>';
+        return `<span class="bp ${p.id === m.you ? 'me' : ''}" style="--c:${p.color}"><i></i>${esc(p.name)}${inGame(p.id) ? `<small>${ORRA}${fmt(p.bets[n.cat])}</small><span class="tag ${n.late.includes(p.id) ? '' : 'ok'}">${n.late.includes(p.id) ? 'Late' : 'Backer'}</span>` : ''}${st}</span>`;
+      }).join('');
+      const names = n.wait.map(id => players[id] ? players[id].name : '?');
+      box().querySelector('.bwait').textContent = n.go ? 'Everyone is ready. Starting...'
+        : waiting && n.cap ? 'Take your time. Buy in or watch when you have read the rules.'
+        : waiting ? 'Take your time. Press Ready when you have read the rules.'
+        : names.length ? `Waiting for ${names.length > 3 ? names.slice(0, 3).join(', ') + ' and ' + (names.length - 3) + ' more' : names.join(', ')}` : '';
+      const rb = $('bready'), sk = $('bskip');
+      rb.hidden = n.go || !(backer || late) || (!waiting && !ready); rb.disabled = ready || n.go; rb.textContent = ready ? 'You are ready' : 'Ready';
+      rb.classList.toggle('done', ready);
+      sk.hidden = !isHost || n.go || !n.wait.length || (n.wait.length === 1 && n.wait[0] === m.you);
+      const bt = box().querySelector('.bt.go');
+      if (n.go && !introGo) { introGo = true; bt.hidden = false; bt.style.setProperty('--dur', Math.max(300, m.ends - now()) + 'ms'); tone(780, .12); if (G_) G_.emit('briefGo'); }
     }
     function api(m) {
       return {
@@ -760,7 +794,6 @@ const RH = (() => {
     }
     function fx(m) { if (!inst || !last || last.id !== m.g || !G[m.g] || !G[m.g].fx) return; try { G[m.g].fx(inst.el, inst.st, m.d, api(last)); } catch (e) { console.error(e); } }
     function tick() {
-      if (buyWin && !last && $('bonus').classList.contains('on')) { const l = buyWin.ends - now(); if (l > 0 && buyWin.can()) buyTick(buyWin.k, l, 3, .7); }
       if (!last || !$('bonus').classList.contains('on')) return;
       const left = last.ends ? Math.max(0, last.ends - now()) : 0, bt = box().querySelector('.bhead .bt i'), clk = box().querySelector('.bclock');
       if (bt) bt.style.width = left ? Math.min(100, left / span.tot * 100) + '%' : '0';
@@ -783,7 +816,7 @@ const RH = (() => {
         <button class="btn go" id="bclose">Back to the table</button></div></div>`);
       const b = $('bclose'); if (b) { b.onclick = close; b.focus(); }
     }
-    function close() { $('bonus').classList.remove('on'); cur = null; inst = null; last = null; introKey = ''; buyWin = null; }
+    function close() { $('bonus').classList.remove('on'); cur = null; inst = null; last = null; introKey = ''; introGo = false; }
     return { intro, update, fx, tick, results, close };
   })();
 
