@@ -23,12 +23,23 @@ const Sfx = (() => {
     'glove-snap':            { n: 3, v: .7, pj: .07, vj: .12, gap: 60, max: 3 },
     'glove-tap':             { n: 4, v: .6, pj: .1, vj: .2, gap: 45, max: 4 },
     'glove-thumbs-down':     { n: 2, v: .65, pj: .04, vj: .1, gap: 1200, max: 1, soft: [.6, 15, 70] },
+    'glove-bow':             { n: 3, v: .7, pj: .04, vj: .1, gap: 1500, max: 1, soft: [.5, 10, 40] },
+    'glove-clench':          { n: 1, v: .6, pj: .08, vj: .12, gap: 400, max: 1, soft: [.4, 6, 30] },
+    'glove-count':           { n: 3, v: .7, pj: .03, vj: .08, gap: 90, max: 2 },
+    'glove-jazz':            { n: 3, v: .7, pj: .03, vj: .08, gap: 900, max: 1, soft: [.4, 6, 25] },
+    'glove-rubmoney':        { n: 4, v: .5, pj: .06, vj: .15, gap: 250, max: 2, soft: [.7, 15, 60] },
+    'glove-shrug':           { n: 3, v: .6, pj: .06, vj: .12, gap: 700, max: 1, soft: [.3, 5, 20] },
+    'glove-wave':            { n: 1, v: .6, pj: .1, vj: .15, gap: 500, max: 1, soft: [.5, 10, 40] },
     'glove-wheel-grab':      { n: 3, v: .75, pj: .07, vj: .1, gap: 200, max: 2 },
     'glove-whoosh':          { n: 4, v: .55, pj: .12, vj: .2, gap: 140, max: 2, soft: [.5, 15, 60] },
     'loss':                  { n: 2, v: .65, pj: .03, vj: .08, gap: 1500, max: 1, soft: [.5, 10, 50] },
     'wheel-land':            { n: 7, v: .75, pj: .03, vj: .08, gap: 600, max: 1, soft: [.3, 4, 15] },
     'wheel-land-settle':     { n: 5, v: .7, pj: .04, vj: .1, gap: 600, max: 1 },
     'wheel-spin-mechanical': { n: 4, v: .55, pj: .04, vj: .08, gap: 500, max: 1, soft: [.9, 40, 160], off: [.5, 250] },
+    // countdown ticks: wood for the early seconds, stopwatch layered in as it gets close, modern for the final second
+    'tick-modern':           { n: 3, v: .6, pj: .02, vj: .06, gap: 400, max: 1 },
+    'tick-stopwatch':        { n: 2, v: .45, pj: .03, vj: .08, gap: 400, max: 1 },
+    'tick-wood':             { n: 3, v: .55, pj: .03, vj: .08, gap: 400, max: 2 },
     'win':                   { n: 4, v: .7, pj: .02, vj: .06, gap: 1500, max: 1, soft: [.4, 6, 30] },
   };
   let on = true, ac = null, out = null;

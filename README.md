@@ -73,7 +73,7 @@ Open http://localhost:8080. Node 18+, no `npm install`. The server reads `PORT` 
 - `public/glove.js`: the Glove (see above). `client.js` feeds it room updates and events and asks it before each spin.
 - `games/<category>/*.js`: 16 subgames. After changing one, run `node tools/bundle-games.js` to rebuild `public/games-bundle.js` for the browser.
 - `public/`: client, shared physics, renderers per category, `vendor/peerjs.min.js` (PeerJS 1.5.4, MIT).
-- `public/sfx.js` + `public/sfx/`: sound effects. Files are `<group>-<n>.mp3`, trimmed, de-clicked (short fades) and loudness matched offline. Each play draws a variant from a shuffle bag (no repeat until all variants played, never twice in a row), with a small pitch and level spread, sometimes a soft attack or a start offset, and glove sounds panned to where the glove is. Groups and levels: the `DEF` table at the top of `sfx.js`.
+- `public/sfx.js` + `public/sfx/`: sound effects. Files are `<group>-<n>.mp3`, trimmed, de-clicked (short fades) and loudness matched offline. Each play draws a variant from a shuffle bag (no repeat until all variants played, never twice in a row), with a small pitch and level spread, sometimes a soft attack or a start offset, and glove sounds panned to where the glove is. Groups and levels: the `DEF` table at the top of `sfx.js`. Countdown ticks (`countdown()` in `client.js`) run over the last 5 s of betting (3 s on rounds under 10 s), the last 3 s of a bonus buy-in window and of bonus game clocks: woodblock ticks that get louder and higher, a stopwatch layer at 2, the modern tick on the final second. A tick only fires right at its second boundary, so lag or a hidden tab never plays it late.
 
 | Group | Plays on |
 |---|---|
