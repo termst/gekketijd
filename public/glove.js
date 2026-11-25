@@ -2,7 +2,7 @@
 // Gekke Tijd: the Glove. A 2.5D white glove that hovers over the game, spins the wheel and reacts to everything.
 //
 // Rendering: a small 3D skeleton (palm slab, 4 fingers x 3 phalanges, 3 thumb bones, cuff with a fading sleeve)
-// is rotated (roll, yaw, pitch), projected with weak perspective, depth sorted and shaded with gradients.
+// is rotated (roll, yaw, pitch), projected with weak perspective, sorted against the palm plane and shaded with gradients.
 // Every joint, the orientation, the screen position, the depth (z) and the scale are damped springs, so any pose
 // blends into any other. Depth drives scale, blur, shadow offset and the HUD layer the canvas sits in.
 //
@@ -35,7 +35,7 @@ const Glove = (() => {
   const RAD = [[.135, .127, .12], [.14, .131, .123], [.134, .126, .12], [.123, .116, .11]];
   const CMC = [-.27, -.2, -.04], TLEN = [.4, .33, .28], TRAD = [.165, .148, .136];
   const PALM = [[-.33, .04], [-.1, .08], [.14, .07], [.33, .02], [.41, -.3], [.43, -.62], [.37, -.86], [.17, -.99], [-.08, -1.03], [-.31, -.98], [-.43, -.74], [-.44, -.44], [-.4, -.14]];
-  const PERSP = .14;
+  const PERSP = .14, PT = .17; // PT: half thickness of the palm slab
   // P: 20 numbers. Finger i: [spread, curl1, curl2, curl3] at 4i. Thumb at 16: [abduction, opposition, flex1, flex2].
   function skel(P) {
     const F = [];
@@ -88,6 +88,13 @@ const Glove = (() => {
     snap: mk([[-.1, .7, .8, .5], [0, .5, .6, .4], [.08, 1.2, 1.4, .9], [.16, 1.3, 1.5, .9]], [.6, .9, .2, .2]),
     rub: mk([[-.05, .55, .5, .3], [.03, .6, .5, .3], [.08, 1.3, 1.5, .9], [.14, 1.4, 1.6, .9]], [.6, .95, .2, .25]),
   };
+  Object.assign(POSES, {
+    cross: mk([[.26, .04, .1, .05], [-.24, .2, .22, .12], FF[2], FF[3]], TUCK),
+    horns: mk([EXT(-.2), FF[1], FF[2], EXT(.34)], [.45, 1.0, .5, .6]),
+    shaka: mk([FF[0], FF[1], FF[2], EXT(.38)], [1.45, .05, -.05, 0]),
+    legs: mk([[-.06, .12, .22, .1], [.07, .12, .22, .1], FF[2], FF[3]], TUCK),
+    bunch: mk([[.3, .9, .55, .3], [.1, .85, .55, .3], [-.1, .88, .55, .3], [-.32, .92, .58, .32]], [.85, 1.1, .3, .25]),
+  });
   for (let n = 0; n <= 5; n++) POSES['n' + n] = mk([0, 1, 2, 3].map(i => i < Math.min(n, 4) ? EXT([-.22, -.06, .1, .28][i]) : FF[i]), n === 5 ? [1.05, .1, 0, .05] : TUCK);
   POSES.peace = POSES.n2;
   // Local contact points of a pose (cached)
@@ -110,13 +117,14 @@ const Glove = (() => {
   const rig = {
     x: new Spr(0, KP, .9), y: new Spr(0, KP, .9), z: new Spr(.2, 28, 1), roll: new Spr(0, 60, .8), yaw: new Spr(0, 45, .85), pitch: new Spr(0, 45, .85),
     sc: new Spr(1, 120, .55), hov: new Spr(1, 6, 1), trem: new Spr(0, 20, 1),
-    P: POSES.relax.map(v => new Spr(v, 70, .78)), pose: 'relax', lock: null, lockTok: null, over: false, bank: .8,
+    P: POSES.relax.map(v => new Spr(v, 70, .78)), pose: 'relax', lock: null, lockTok: null, lockW: 1, over: false, bank: .8,
   };
   const off = { x: 0, y: 0, z: 0, roll: 0, P: new Float32Array(20) };
   const SPRINGS = [rig.x, rig.y, rig.z, rig.roll, rig.yaw, rig.pitch, rig.sc, rig.hov, rig.trem, ...rig.P];
   function setPose(name, k = 70, jit = .05) {
     const a = POSES[name]; if (!a) return; rig.pose = name;
-    a.forEach((v, i) => rig.P[i].to(v + (i % 4 ? rnd(-jit, jit) : rnd(-jit, jit) * .5), k));
+    // each finger settles a beat after its neighbour (pinky last), the thumb leads: no robotic all-at-once snaps
+    a.forEach((v, i) => rig.P[i].to(v + (i % 4 ? rnd(-jit, jit) : rnd(-jit, jit) * .5), k * (i < 16 ? 1 - Math.floor(i / 4) * .07 : 1.08)));
   }
   function setFinger(i, c, k = 200) { for (let j = 0; j < 3; j++) if (c[j] != null) rig.P[i * 4 + 1 + j].to(c[j], k); }
   function setThumb(t, k = 200) { t.forEach((v, j) => v != null && rig.P[16 + j].to(v, k)); }
@@ -159,7 +167,7 @@ const Glove = (() => {
   const anySpot = () => [rnd(.08, .92) * W, rnd(.14, .86) * Hh];
   function pathPick(calm) {
     const a = st.agit, c = calm ?? (1 - a);
-    return pick('path', [['arc', 1.2], ['s', 1], ['swoop', .7 + c * .5], ['loop', .25 + c * .4], ['direct', .4 + a], ['stutter', .1 + a * .9], ['lurch', .15 + a * .7], ['dive', .55]]);
+    return pick('path', [['arc', 1.2], ['s', 1], ['swoop', .7 + c * .5], ['loop', .25 + c * .4], ['direct', .4 + a], ['stutter', .03 + a * .3], ['lurch', .12 + a * .5], ['dive', .55]]);
   }
 
   // ---------------------------------------------------------------- Projection helpers
@@ -195,7 +203,7 @@ const Glove = (() => {
     if (mv && mv.tok === tok) { mv.rej(CANCEL); mv = null; }
     if (rig.lockTok === tok) unlock();
     if (tok.snd) tok.snd.forEach(h => h.stop(200));
-    rig.trem.to(0); breath = 1;
+    rig.trem.to(0); rig.hov.to(1); breath = 1; rig.over = false;
   }
   function run(name, fn, pri = 0, d) {
     if (cur && cur.pri > pri) return false;
@@ -224,13 +232,17 @@ const Glove = (() => {
       if (!ease) ease = style === 'stutter' ? 'stutter' : style === 'lurch' ? 'lurch' : 'sine';
       let speed = (o.speed || 520) * (CALM ? .5 : 1) * (1 + st.agit * .35);
       const dur = o.dur ? o.dur * (CALM ? 1.6 : 1) : clamp(d / speed, .22, 3) * 1000 * (style === 'loop' ? 1.5 : 1);
+      // momentum: the new path starts with the velocity the hand already has and bends into the route,
+      // so chained moves flow instead of stopping dead between segments. Capped so it never overshoots wildly.
+      let cvx = rig.x.v, cvy = rig.y.v; const T = dur / 1000, peak = hyp(cvx, cvy) * T * 4 / 27, cap = Math.max(S0 * .9, d * .45);
+      if (peak > cap) { cvx *= cap / peak; cvy *= cap / peak; }
       rig.x.k = rig.y.k = o.k || KP; rig.x.z = rig.y.z = o.damp || .9;
       if (o.z != null || zArc) rig.z.k = o.zk || 28;
       rig.bank = o.bank ?? .8;
-      mv = { tok, x0, y0, c1, c2, x, y, t0: now(), dur, ease: E[ease] || E.sine, z0: rig.z.t, z1: o.z ?? rig.z.t, zArc, res, rej };
+      mv = { tok, x0, y0, c1, c2, x, y, t0: now(), dur, ease: E[ease] || E.sine, z0: rig.z.t, z1: o.z ?? rig.z.t, zArc, cvx: cvx * T, cvy: cvy * T, res, rej };
     });
   }
-  function lock(tok, fn) { rig.lock = fn; rig.lockTok = tok; }
+  function lock(tok, fn) { rig.lock = fn; rig.lockTok = tok; rig.lockW = 0; }
   function unlock() { rig.lock = null; rig.lockTok = null; }
   let breath = 1;
   function ctx(tok) {
@@ -326,6 +338,12 @@ const Glove = (() => {
         fg.moveTo(0, -s); fg.quadraticCurveTo(0, 0, s, 0); fg.quadraticCurveTo(0, 0, 0, s); fg.quadraticCurveTo(0, 0, -s, 0); fg.quadraticCurveTo(0, 0, 0, -s);
         fg.fillStyle = q.c; fg.fill(); fg.lineWidth = 1.2; fg.strokeStyle = '#2b1606'; fg.stroke(); fg.restore();
       } else if (q.t === 'dust') { fg.globalAlpha = (1 - u) * .55; fg.beginPath(); fg.arc(q.x, q.y, q.r * (1 + u * 1.2), 0, TAU); fg.fillStyle = '#efeaff'; fg.fill(); }
+      else if (q.t === 'coin') {
+        // flipping coin: the disc squashes with the flip, darker on its back side
+        const f = Math.cos(q.age * q.spin), r = q.s; fg.globalAlpha = 1; fg.save(); fg.translate(q.x, q.y); fg.scale(1, Math.max(.1, Math.abs(f)));
+        fg.beginPath(); fg.arc(0, 0, r, 0, TAU); fg.fillStyle = f > 0 ? '#F2C65A' : '#cf9d33'; fg.fill(); fg.lineWidth = 1.6; fg.strokeStyle = '#2b1606'; fg.stroke();
+        fg.beginPath(); fg.arc(0, 0, r * .6, 0, TAU); fg.lineWidth = 1.2; fg.strokeStyle = 'rgba(43,22,6,.45)'; fg.stroke(); fg.restore();
+      }
       else if (q.t === 'chip') { fg.save(); fg.translate(q.x, q.y); fg.rotate(q.rot); fg.fillStyle = '#F2C65A'; fg.fillRect(-q.s / 2, -q.s / 4, q.s, q.s / 2); fg.lineWidth = 1; fg.strokeStyle = '#2b1606'; fg.strokeRect(-q.s / 2, -q.s / 4, q.s, q.s / 2); fg.restore(); }
     }
     fg.globalAlpha = 1;
@@ -359,34 +377,48 @@ const Glove = (() => {
   }
   function ensure(cvs, w, h) { if (cvs.width < w || cvs.height < h) { cvs.width = Math.max(cvs.width, Math.ceil(w * 1.2)); cvs.height = Math.max(cvs.height, Math.ceil(h * 1.2)); } }
 
+  // Draw order: painter's sort by depth alone lets curled fingers and the thumb pop through the palm while the hand
+  // turns. Instead every bone is classed against the palm plane (in hand space): bones on the hidden side of the palm
+  // draw first, then the palm slab, then the bones on the visible side. Within a group they sort by depth.
+  // The visible side switches with hysteresis, and only near edge-on, where the palm covers almost nothing.
+  let face = 1;
   function render() {
     const z = rig.z.x + off.z; Sc = scaleAt(z) * rig.sc.x;
     OX = rig.x.x + off.x; OY = rig.y.x + off.y; lastPos = [OX, OY];
     M = rotM(rig.roll.x + off.roll, rig.yaw.x, rig.pitch.x);
+    if (M[8] > .09) face = 1; else if (M[8] < -.09) face = -1;
     const P = rig.P.map((s, i) => s.x + off.P[i]), sk = skel(P); lastSk = sk;
-    const lw = Math.max(1.3, Sc * .028), items = [];
+    const lw = Math.max(1.3, Sc * .028), back = [], front = [];
     let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
     const grow = (x, y, r = 0) => { if (x - r < x0) x0 = x - r; if (y - r < y0) y0 = y - r; if (x + r > x1) x1 = x + r; if (y + r > y1) y1 = y + r; };
-    const cap = (a, b, ra, rb, bias) => { const Ap = P3(a), Bp = P3(b), r0 = ra * Sc * Ap[3], r1 = rb * Sc * Bp[3]; grow(Ap[0], Ap[1], r0); grow(Bp[0], Bp[1], r1); items.push({ k: (Ap[2] + Bp[2]) / 2 + bias, A: Ap, B: Bp, ra: r0, rb: r1 }); };
+    const cap = (a, b, ra, rb, bias) => {
+      const Ap = P3(a), Bp = P3(b), r0 = ra * Sc * Ap[3], r1 = rb * Sc * Bp[3]; grow(Ap[0], Ap[1], r0); grow(Bp[0], Bp[1], r1);
+      // side of the palm plane: the far end of the bone decides, so a finger curling under the palm goes under it
+      const lz = (a[2] + b[2] * 2) / 3 * face;
+      (lz < -.05 ? back : front).push({ k: (Ap[2] + Bp[2]) / 2 + bias, A: Ap, B: Bp, ra: r0, rb: r1 });
+    };
     sk.F.forEach((pts, i) => { for (let j = 0; j < 3; j++) cap(pts[j], pts[j + 1], RAD[i][j], RAD[i][j] * .97, j * .002); });
-    for (let j = 0; j < 3; j++) cap(sk.T[j], sk.T[j + 1], TRAD[j], TRAD[j] * .96, j * .002 + (j ? 0 : -.02));
-    const slices = [-.13, 0, .13].map(lz => { const pts = PALM.map(([x, y]) => P3([x, y, lz])); pts.forEach(p => grow(p[0], p[1])); return { lz, pts, k: P3([0, -.5, lz])[2] }; }).sort((a, b) => a.k - b.k);
-    items.push({ k: P3([0, -.5, 0])[2] - .03, palm: true });
+    for (let j = 0; j < 3; j++) cap(sk.T[j], sk.T[j + 1], TRAD[j], TRAD[j] * .96, j * .002);
+    // faces are inset a little and the full outline sits mid slab: a bevelled, pillow like edge
+    const ins = ([x, y], lz) => P3([x * .9, -.48 + (y + .48) * .92, lz]);
+    const near = PALM.map(p => ins(p, PT * face)), far = PALM.map(p => ins(p, -PT * face)), mid = PALM.map(([x, y]) => P3([x, y, 0]));
+    mid.forEach(p => grow(p[0], p[1]));
     const cuA = P3([0, -.05, 0]), cuB = P3([0, .3, 0]), cuC = P3([0, 1.55, 0]);
     grow(cuA[0], cuA[1], .34 * Sc * cuA[3]); grow(cuC[0], cuC[1], .48 * Sc * cuC[3]);
-    items.push({ k: P3([0, .25, 0])[2] - .06, cuff: true });
-    items.sort((a, b) => a.k - b.k);
+    // the cuff sits under the hand unless the forearm points at the viewer
+    const cuffFirst = P3([0, .25, 0])[2] - .06 < P3([0, -.5, 0])[2];
+    back.sort((a, b) => a.k - b.k); front.sort((a, b) => a.k - b.k);
     const pad = lw * 2 + 3; x0 = Math.floor(x0 - pad); y0 = Math.floor(y0 - pad); x1 = Math.ceil(x1 + pad); y1 = Math.ceil(y1 + pad);
     const bw = Math.min(x1 - x0, W * 2), bh = Math.min(y1 - y0, Hh * 2), pw = Math.ceil(bw * dpr), ph = Math.ceil(bh * dpr);
     ensure(Hb, pw, ph); ensure(Cb, pw, ph);
     hb.setTransform(1, 0, 0, 1, 0, 0); hb.clearRect(0, 0, pw + 2, ph + 2); hb.setTransform(dpr, 0, 0, dpr, -x0 * dpr, -y0 * dpr);
     hb.lineJoin = 'round';
-    const backView = M[8] > 0;
-    for (const it of items) {
-      if (it.palm) drawPalm(hb, slices, backView, lw);
-      else if (it.cuff) drawCuff(cuA, cuB, cuC, lw, x0, y0, pw, ph);
-      else { const { A: a, B: b, ra, rb } = it; capPath(hb, a[0], a[1], ra, b[0], b[1], rb); hb.lineWidth = lw * 2; hb.strokeStyle = LINE; hb.stroke(); hb.fillStyle = capFill(hb, a[0], a[1], ra, b[0], b[1], rb); hb.fill(); }
-    }
+    const bone = it => { const { A: a, B: b, ra, rb } = it; capPath(hb, a[0], a[1], ra, b[0], b[1], rb); hb.lineWidth = lw * 2; hb.strokeStyle = LINE; hb.stroke(); hb.fillStyle = capFill(hb, a[0], a[1], ra, b[0], b[1], rb); hb.fill(); };
+    if (cuffFirst) drawCuff(cuA, cuB, cuC, lw, x0, y0, pw, ph);
+    back.forEach(bone);
+    drawPalm(hb, near, far, mid, lw);
+    front.forEach(bone);
+    if (!cuffFirst) drawCuff(cuA, cuB, cuC, lw, x0, y0, pw, ph);
     // composite: clear last frame, shadow, hand
     // full clear: a dirty rect misses pixels when blur, shadow or a resize changes the footprint
     g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, cv.width, cv.height);
@@ -394,24 +426,40 @@ const Glove = (() => {
     const OFF = cv.width + pw + 50;
     g.save(); g.shadowColor = `rgba(11,2,7,${sa.toFixed(3)})`; g.shadowBlur = blur * dpr; g.shadowOffsetX = OFF + sdx * dpr; g.shadowOffsetY = sdy * dpr;
     g.drawImage(Hb, 0, 0, pw, ph, x0 * dpr - OFF, y0 * dpr, pw, ph); g.restore();
-    const far = clamp(-z - .35, 0, 1), near = clamp(z - .85, 0, 1), bl = far * 3.2 + near * 2.4;
-    if (HAS_FILTER && (bl > .15 || far > 0)) g.filter = `blur(${(bl * dpr).toFixed(2)}px) brightness(${(1 - far * .22).toFixed(3)}) saturate(${(1 - far * .3).toFixed(3)})`;
+    const dFar = clamp(-z - .35, 0, 1), dNear = clamp(z - .85, 0, 1), bl = dFar * 3.2 + dNear * 2.4;
+    if (HAS_FILTER && (bl > .15 || dFar > 0)) g.filter = `blur(${(bl * dpr).toFixed(2)}px) brightness(${(1 - dFar * .22).toFixed(3)}) saturate(${(1 - dFar * .3).toFixed(3)})`;
     g.drawImage(Hb, 0, 0, pw, ph, x0 * dpr, y0 * dpr, pw, ph);
     if (HAS_FILTER) g.filter = 'none';
   }
-  function drawPalm(c, slices, backView, lw) {
-    const near = slices[slices.length - 1];
-    for (const s of slices) { smoothPath(c, s.pts); c.lineWidth = lw * 2; c.strokeStyle = LINE; c.stroke(); }
-    for (const s of slices) {
-      smoothPath(c, s.pts);
-      if (s !== near) { c.fillStyle = SIDE; c.fill(); continue; }
-      let mx = 0, my = 0, r = 0; s.pts.forEach(p => { mx += p[0]; my += p[1]; }); mx /= s.pts.length; my /= s.pts.length; s.pts.forEach(p => r = Math.max(r, hyp(p[0] - mx, p[1] - my)));
-      const gr = c.createRadialGradient(mx + LX * r * .35, my + LY * r * .35, r * .05, mx, my, r * 1.1);
-      gr.addColorStop(0, '#ffffff'); gr.addColorStop(.42, '#efedf5'); gr.addColorStop(.78, '#c8c1d9'); gr.addColorStop(1, '#9c93b5');
-      c.fillStyle = gr; c.fill();
-    }
-    // details on the visible face: stitched seams on the back, creases on the palm
-    const lz = near.lz, line = (pts, w, col) => { c.beginPath(); pts.forEach((p, i) => { const q = P3([p[0], p[1], lz]); i ? c.lineTo(q[0], q[1]) : c.moveTo(q[0], q[1]); }); c.lineWidth = w; c.strokeStyle = col; c.stroke(); };
+  // Convex hull (monotone chain) of projected points: the silhouette of the palm slab from any angle.
+  function hull(pts) {
+    const p = pts.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]), cr = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+    const lo = [], up = [];
+    for (const q of p) { while (lo.length > 1 && cr(lo[lo.length - 2], lo[lo.length - 1], q) <= 0) lo.pop(); lo.push(q); }
+    for (let i = p.length - 1; i >= 0; i--) { const q = p[i]; while (up.length > 1 && cr(up[up.length - 2], up[up.length - 1], q) <= 0) up.pop(); up.push(q); }
+    lo.pop(); up.pop(); return lo.concat(up);
+  }
+  // Palm as a solid slab: one outline around both faces, a shaded side wall, the visible face on top.
+  function drawPalm(c, near, far, mid, lw) {
+    const sil = hull(near.concat(far, mid)), vis = clamp((Math.abs(M[8]) - .06) / .3, 0, 1);
+    let mx = 0, my = 0, fx = 0, fy = 0, r = 0;
+    near.forEach(p => { mx += p[0]; my += p[1]; }); mx /= near.length; my /= near.length; near.forEach(p => r = Math.max(r, hyp(p[0] - mx, p[1] - my)));
+    far.forEach(p => { fx += p[0]; fy += p[1]; }); fx /= far.length; fy /= far.length;
+    smoothPath(c, sil); c.lineWidth = lw * 2; c.strokeStyle = LINE; c.stroke();
+    // side wall: lit toward the near face, darker toward the far one
+    const dx = fx - mx, dy = fy - my, dl = hyp(dx, dy);
+    // rounded edge: bright near the visible face, a soft core, dark toward the far face
+    if (dl > 1) { const e = dl + PT * Sc * .9, sg = c.createLinearGradient(mx, my, mx + dx / dl * e, my + dy / dl * e); sg.addColorStop(0, '#ebe8f3'); sg.addColorStop(.35, '#d4cee2'); sg.addColorStop(.7, SIDE); sg.addColorStop(1, '#8a81a6'); c.fillStyle = sg; }
+    else c.fillStyle = SIDE;
+    c.fill();
+    smoothPath(c, near);
+    const gr = c.createRadialGradient(mx + LX * r * .35, my + LY * r * .35, r * .05, mx, my, r * 1.1);
+    gr.addColorStop(0, '#ffffff'); gr.addColorStop(.42, '#efedf5'); gr.addColorStop(.78, '#c8c1d9'); gr.addColorStop(1, '#9c93b5');
+    c.fillStyle = gr; c.fill();
+    if (vis <= 0) return;
+    // rim where the face meets the side wall, then details: stitched seams on the back, creases on the palm
+    c.globalAlpha = vis; c.lineWidth = lw * .7; c.strokeStyle = 'rgba(120,108,150,.28)'; c.stroke();
+    const lz = PT * face, line = (pts, w, col) => { c.beginPath(); pts.forEach((p, i) => { const q = P3([p[0], p[1], lz]); i ? c.lineTo(q[0], q[1]) : c.moveTo(q[0], q[1]); }); c.lineWidth = w; c.strokeStyle = col; c.stroke(); };
     c.lineCap = 'round';
     if (lz > 0) {
       [[-.17, -.3, -.2, -.8], [.03, -.32, .02, -.84], [.22, -.3, .23, -.76]].forEach(([ax, ay, bx, by]) => {
@@ -422,14 +470,23 @@ const Glove = (() => {
       line([[-.36, -.62], [-.1, -.56], [.12, -.6], [.36, -.7]], lw * .9, 'rgba(120,108,150,.5)');
       line([[-.3, -.36], [-.05, -.42], [.18, -.5]], lw * .8, 'rgba(120,108,150,.42)');
     }
+    c.globalAlpha = 1;
   }
   function drawCuff(a, b, c2, lw, x0, y0, pw, ph) {
     const c = cb; c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, pw + 2, ph + 2); c.setTransform(dpr, 0, 0, dpr, -x0 * dpr, -y0 * dpr); c.lineJoin = 'round';
     const seg = (p, q, r0, r1) => { const ra = r0 * Sc * p[3], rb = r1 * Sc * q[3]; capPath(c, p[0], p[1], ra, q[0], q[1], rb); c.lineWidth = lw * 2; c.strokeStyle = LINE; c.stroke(); c.fillStyle = capFill(c, p[0], p[1], ra, q[0], q[1], rb); c.fill(); };
-    seg(b, c2, .35, .47); seg(a, b, .31, .335);
-    // rolled hem
-    c.beginPath(); for (let i = 0; i <= 24; i++) { const t = i / 24 * TAU, q = P3([Math.cos(t) * .345, .3, Math.sin(t) * .345]); i ? c.lineTo(q[0], q[1]) : c.moveTo(q[0], q[1]); }
-    c.lineWidth = Sc * .085 + lw * 2; c.strokeStyle = LINE; c.stroke(); c.lineWidth = Sc * .085; c.strokeStyle = '#ebe8f3'; c.stroke();
+    // rolled hem around the wrist: the half behind the cuff goes under it, the near half over it
+    const ring = [], cz = P3([0, .3, 0])[2];
+    for (let i = 0; i <= 32; i++) { const t = i / 32 * TAU; ring.push(P3([Math.cos(t) * .345, .3, Math.sin(t) * .345])); }
+    const hem = nearSide => {
+      c.beginPath(); let on = false;
+      for (let i = 1; i < ring.length; i++) {
+        const p = ring[i - 1], q = ring[i];
+        if ((p[2] + q[2] >= cz * 2) === nearSide) { if (!on) c.moveTo(p[0], p[1]); c.lineTo(q[0], q[1]); on = true; } else on = false;
+      }
+      c.lineCap = 'round'; c.lineWidth = Sc * .085 + lw * 2; c.strokeStyle = LINE; c.stroke(); c.lineWidth = Sc * .085; c.strokeStyle = '#ebe8f3'; c.stroke();
+    };
+    hem(false); seg(b, c2, .35, .47); seg(a, b, .31, .335); hem(true);
     // fade the sleeve into nothing
     c.globalCompositeOperation = 'destination-in';
     const gr = c.createLinearGradient(b[0], b[1], c2[0], c2[1]); gr.addColorStop(0, 'rgba(0,0,0,1)'); gr.addColorStop(.15, 'rgba(0,0,0,.95)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
@@ -465,7 +522,8 @@ const Glove = (() => {
     motion(dt);
     procedural(dt);
     for (const s of SPRINGS) s.step(dt);
-    if (rig.lock) { const p = rig.lock(); if (p) { rig.x.x = rig.x.t = p[0]; rig.y.x = rig.y.t = p[1]; } }
+    // a lock (hand on the wheel) eases in over ~150 ms, so grabbing never jumps the hand to the contact point
+    if (rig.lock) { const p = rig.lock(); if (p) { rig.lockW = Math.min(1, rig.lockW + dt / .15); const w = E.sine(rig.lockW); rig.x.t = p[0]; rig.y.t = p[1]; rig.x.x = lerp(rig.x.x, p[0], w); rig.y.x = lerp(rig.y.x, p[1], w); } }
     render(); setLayer(); drawFx(dt);
   }
   let lockPrev = null, lockVel = [0, 0];
@@ -480,10 +538,12 @@ const Glove = (() => {
     const u = clamp((now() - mv.t0) / mv.dur, 0, 1), e = mv.ease(u), v = 1 - e;
     const bx = v * v * v * mv.x0 + 3 * v * v * e * mv.c1[0] + 3 * v * e * e * mv.c2[0] + e * e * e * mv.x;
     const by = v * v * v * mv.y0 + 3 * v * v * e * mv.c1[1] + 3 * v * e * e * mv.c2[1] + e * e * e * mv.y;
-    rig.x.t = bx; rig.y.t = by;
+    const cw = u * (1 - u) * (1 - u);
+    rig.x.t = bx + mv.cvx * cw; rig.y.t = by + mv.cvy * cw;
     rig.z.t = lerp(mv.z0, mv.z1, E.sine(u)) + mv.zArc * Math.sin(PI * u);
     if (u >= 1) { const r = mv.res; mv = null; r(); }
   }
+  const nz = (t, s) => Math.sin(t * 23.7 + s * 1.7) * .45 + Math.sin(t * 37.1 + s * 4.3) * .33 + Math.sin(t * 58.3 + s * 2.9) * .22;
   function procedural(dt) {
     const hv = rig.hov.x, t = T, ag = st.agit, tr = rig.trem.x + Math.max(0, ag - .55) * .5;
     st.agit = lerp(st.agit, .25, dt * .04);
@@ -501,9 +561,10 @@ const Glove = (() => {
       off.P[i * 4 + 3] = Math.sin(ph - 1) * .03 * hv * breath;
     }
     off.P[18] = Math.sin(t * 1.3) * .04 * breath; off.P[16] = Math.sin(t * .9) * .03 * breath;
+    // tremor: layered fast sines instead of per frame random, so it shivers rather than jitters (and is frame rate independent)
     if (tr > .01) {
-      off.x += (Math.random() - .5) * tr * S0 * .05; off.y += (Math.random() - .5) * tr * S0 * .05; roll += (Math.random() - .5) * tr * .07;
-      for (let i = 0; i < 20; i++) if (i % 4) off.P[i] += (Math.random() - .5) * tr * .14;
+      off.x += nz(t, 1) * tr * S0 * .045; off.y += nz(t, 2) * tr * S0 * .045; roll += nz(t, 3) * tr * .065;
+      for (let i = 0; i < 20; i++) if (i % 4) off.P[i] += nz(t * 1.3, 4 + i) * tr * .12;
     }
     off.roll = roll;
     // random twitches: more when agitated
@@ -522,6 +583,11 @@ const Glove = (() => {
     const p = o.path || pathPick();
     await c.go(w[0], w[1], { z, speed: o.speed || 950, path: p, ease: o.ease, k: o.k || 120 });
     return { roll, at, z };
+  }
+  // Leave the screen the short way (down), then reposition while unseen: the hand never pops out of existence.
+  async function offstage(c, x, y) {
+    if (rig.x.x > -S0 * 2 && rig.x.x < W + S0 * 2 && rig.y.x > -S0 * 2 && rig.y.x < Hh + S0 * 2) await c.go(rig.x.x + rnd(-.5, .5) * S0, Hh + S0 * 4.5, { dur: 420, path: 'direct', ease: 'in', bank: .3 });
+    rig.x.x = rig.x.t = x; rig.y.x = rig.y.t = y; rig.x.v = rig.y.v = 0;
   }
   async function bob(c, n, amp, ms, axis = [0, 1]) {
     const x = rig.x.t, y = rig.y.t;
@@ -634,8 +700,9 @@ const Glove = (() => {
         c.orient(null, null, pitch - .55, 600); c.depth(.55, 300); await c.wait(130);
         c.thumb([1.3, 0], 300); c.orient(null, null, pitch, 200); c.depth(.7, 100); await c.wait(rnd(180, 300));
       }
-      // blow the smoke off
-      c.orient(rig.roll.t - .5, null, .2, 80); await c.go(rig.x.t, rig.y.t - S0 * .6, { dur: 400, path: 'arc' }); await c.wait(300);
+      // blow the smoke off, sometimes twirl and holster
+      c.orient(rig.roll.t - .5, null, .2, 80); await c.go(rig.x.t, rig.y.t - S0 * .6, { dur: 400, path: 'arc' });
+      if (chance(.45)) await R.twirl(c); else await c.wait(300);
     },
     async ok(c, d = {}) {
       await show(c, { pose: 'ok', which: 'middle', ang: -PI / 2 + rnd(-.3, .3), yaw: PI + rnd(-.3, .3), pitch: rnd(-.1, .2), z: .55, over: d.over });
@@ -752,7 +819,7 @@ const Glove = (() => {
       c.over(true); c.pose('fist', 120);
       const at = [W * rnd(.35, .65), Hh * rnd(.35, .5)]; c.orient(rnd(-.15, .15), rnd(-.25, .25), .3, 60);
       const w = wristFor(tipOf('middle', 'mid'), at[0], at[1], rig.roll.t, rig.yaw.t, .3, .7);
-      rig.x.x = rig.x.t = w[0]; rig.y.x = rig.y.t = Hh + S0 * 3;
+      await offstage(c, w[0], Hh + S0 * 3);
       await c.go(w[0], w[1], { dur: 1100, path: 'direct', z: .7, ease: 'cubic' });
       setFinger(1, [0, .03, .02], 18); c.snd('glove-middle'); await c.wait(1300);
       c.depth(.98, 40); c.scale(1.08, 60); await c.wait(900); c.depth(.7, 60); c.scale(1, 60); await c.wait(500);
@@ -776,7 +843,7 @@ const Glove = (() => {
       c.over(true); c.pose('middle', 300);
       const x = W * rnd(.25, .75), roll = rnd(-.15, .15); c.orient(roll, rnd(-.2, .2), .15, 200);
       const w = wristFor(tipOf('middle', 'middle'), x, Hh - S0 * 1.2, roll, rig.yaw.t, .15, .5);
-      rig.x.x = rig.x.t = w[0]; rig.y.x = rig.y.t = Hh + S0 * 4; rig.z.x = rig.z.t = .5;
+      await offstage(c, w[0], Hh + S0 * 4); c.depth(.5, 60);
       await c.go(w[0], w[1], { dur: 2200, path: 'direct', ease: 'lurch', z: .5 });
       c.snd('glove-middle'); c.trem(.25); await c.wait(1200); c.trem(0);
       await c.go(w[0], Hh + S0 * 4, { dur: 600, path: 'direct', ease: 'in' });
@@ -788,6 +855,98 @@ const Glove = (() => {
         await c.goPt('mid', at[0], at[1], { speed: 1600, path: any(['arc', 'swoop']), z: .6 });
         c.pose('middle', 900); c.snd('glove-middle', { vol: k ? 1 : .85 }); c.scale(1.12, 600); await c.wait(160); c.scale(1, 200); await c.wait(rnd(700, 900));
       }
+    },
+    // ---- added gestures. Sound cue timings (ms from the cue before) are listed next to each c.snd call.
+    // Coin flip: thumb flicks a coin up, the fist snatches it out of the air.
+    async coinFlip(c, d = {}) {
+      await show(c, { pose: 'fist', which: 'knuck', ang: -PI / 2, yaw: rnd(1.05, 1.35) * sgn(), pitch: .05, z: .45, over: d.over, speed: 1100 });
+      c.thumb([.5, 1.0, .6, .7], 320); c.hov(.2); await c.wait(260);                      // load the thumb under the index
+      c.thumb([1.45, .05, -.1, 0], 1500); c.orient(null, null, rig.pitch.t - .2, 400);
+      const tp = c.tip('thumb'), gr = S0 * 34, air = Math.min(rnd(.78, .92), Math.sqrt(8 * Math.max(S0, tp[1] - S0 * .5) / gr)); // never off the top
+      c.snd('glove-coin-flick', {}, tp[0]);                                                // cue 1: flick (t = 0)
+      const coin = { t: 'coin', age: 0, x: tp[0], y: tp[1] - S0 * .1, vx: 0, vy: -gr * air / 2, g: gr, s: S0 * .16, spin: rnd(26, 34), life: air + .4 };
+      parts.push(coin); fxDirty = true;
+      await c.wait(160); c.pose('relax', 220); c.orient(null, null, rig.pitch.t + .2, 200);
+      await c.go(rig.x.t, rig.y.t + S0 * .25, { dur: air * 1000 - 330, path: 'direct', ease: 'sine', bank: 0 });
+      await c.go(rig.x.t, rig.y.t - S0 * .25, { dur: 150, path: 'direct', ease: 'out', bank: 0 });
+      c.pose('fist', 900); coin.age = coin.life;                                           // the fist closes over the coin
+      c.snd('glove-coin-catch');                                                           // cue 2: catch (t = flight time, ~780 to 920 ms after cue 1)
+      c.scale(.93, 600); await bob(c, 1, S0 * .3, 110); c.scale(1, 160); c.hov(1);
+      if (chance(.5)) { c.thumb([1.45, .05, -.05, 0], 300); await c.wait(450); } else await c.wait(350);
+    },
+    // Chef's kiss: fingertips bunched, brought to the "lips" (toward the viewer), then burst open.
+    async chefKiss(c, d = {}) {
+      await show(c, { pose: 'bunch', which: 'tips', ang: -PI / 2 + rnd(-.2, .2), yaw: PI + rnd(-.35, .35), pitch: .35, z: .5, over: d.over });
+      await c.wait(200);
+      c.depth(.98, 120); c.scale(1.07, 260); await c.wait(300);
+      c.snd('glove-kiss');                                                                 // cue: the "mwah", fires as the hand pops open
+      c.pose('splay', 1000); c.depth(.62, 160); c.scale(1, 200);
+      const tp = c.tip('tips'); c.burst(tp[0], tp[1], 'snap', .8, false);
+      await c.go(rig.x.t + sgn() * S0 * .7, rig.y.t - S0 * .6, { dur: 320, path: 'arc', ease: 'out' });
+      await c.wait(rnd(450, 650));
+    },
+    // Rock on: horns up and four head bangs on a fixed 220 ms beat.
+    async rockOn(c, d = {}) {
+      await show(c, { pose: 'horns', which: 'middle', ang: -PI / 2 + rnd(-.2, .2), yaw: PI + rnd(-.3, .3), pitch: .1, z: .6, over: d.over, speed: 1200 });
+      c.snd('glove-rock', { hold: true });                                                 // cue: riff starts on the first bang, bangs every 220 ms
+      const p0 = rig.pitch.t;
+      for (let i = 0; i < 4; i++) {
+        c.orient(null, null, p0 + .6, 700); c.depth(.78, 500); c.scale(1.05, 500); await c.wait(95);
+        c.orient(null, null, p0, 350); c.depth(.6, 300); c.scale(1, 300); await c.wait(125);
+      }
+      c.trem(.9); await c.wait(450); c.trem(0); await c.wait(250);
+    },
+    // Shaka / call me: thumb and pinky out, wrist rocks three times.
+    async shaka(c, d = {}) {
+      await show(c, { pose: 'shaka', which: 'mid', ang: -PI / 2 + rnd(-.2, .2), yaw: PI + rnd(-.3, .3), pitch: .1, z: .5, over: d.over });
+      c.snd('glove-shaka', { hold: true });                                                // cue: start of the rock, 6 swings of 170 ms
+      await rock(c, 3, rnd(.3, .38), 170, rig.roll.t); await c.wait(300);
+    },
+    // Table slam: fist raised high, hammered down on the table edge.
+    async tableSlam(c, d = {}) {
+      const r = pickEl('table'); if (!r) return R.punchAir(c, d);
+      const tx = r.left + r.width * rnd(.2, .8), ty = r.top + S0 * .1;
+      c.over(!!d.over); c.pose('fist', 220); c.aim('knuck', PI / 2, rnd(1.15, 1.45) * sgn(), 0, 140); st.agit = Math.min(1, st.agit + .2);
+      await c.goPt('knuck', tx, ty - S0 * 2.8, { speed: 1000, z: .55, path: pathPick() });
+      c.trem(.5); c.scale(1.06, 200); await c.wait(rnd(220, 340)); c.trem(0);
+      await c.goPt('knuck', tx, ty, { dur: 115, path: 'direct', ease: 'in', k: 1300, damp: .7, bank: 0, z: .3 });
+      c.burst(tx, ty, 'impact', 1.35, 'glove-slam');                                       // cue: impact
+      c.scale(.9, 700);
+      await c.goPt('knuck', tx, ty - S0 * .35, { dur: 140, path: 'direct', ease: 'out', k: 500, bank: 0, z: .3 });
+      await c.goPt('knuck', tx, ty, { dur: 160, path: 'direct', ease: 'sine', k: 400, bank: 0, z: .3 });
+      c.scale(1, 160); c.hov(.3); await c.wait(rnd(450, 700)); c.hov(1); c.soft();
+    },
+    // Sweep: flat hand clears the losing chips off the table in one swipe.
+    async sweep(c, d = {}) {
+      const r = pickEl('table'); if (!r) return R.palmNo(c, d);
+      const dir = sgn(), y = r.top + r.height * rnd(.25, .55), xa = r.left + r.width * (dir > 0 ? .08 : .92), xb = r.left + r.width * (dir > 0 ? .92 : .08);
+      c.over(!!d.over); c.pose('flat', 140); c.aim('middle', dir > 0 ? 0 : PI, 0, -.95, 120);
+      await c.goPt('palm', xa, y, { speed: 900, z: .2, path: pathPick() });
+      await c.wait(160);
+      c.snd('glove-sweep', { hold: true }, (xa + xb) / 2);                                   // cue: swipe start, swipe lasts 520 ms
+      const sw = c.go(rig.x.t + (xb - xa), rig.y.t, { dur: 520, path: 'direct', ease: 'cubic', bank: 0, z: .2 });
+      c.tween(520, () => { if (Math.random() < .45) { const tp = c.tip('tips'); burst(tp[0], tp[1] + S0 * .15, 'grab', .5, false); } }, E.lin).catch(() => {});
+      await sw;
+      const tp = c.tip('tips'); burst(tp[0], tp[1], 'whoosh', dir > 0 ? PI : 0, false);
+      c.pose('relax', 120); await c.go(rig.x.t + dir * S0 * .8, rig.y.t - S0 * .9, { dur: 260, path: 'arc', ease: 'out' });
+      await c.wait(300);
+    },
+    // Hurry up: index up, twirling "wrap it up" circles, then a tap toward the clock.
+    async hurry(c, d = {}) {
+      await show(c, { pose: 'point', which: 'index', ang: -PI / 2, yaw: rnd(-.3, .3), pitch: .2, z: .5, over: d.over });
+      c.snd('glove-hurry', { hold: true });                                                // cue: 3 circles over 1050 ms
+      const x = rig.x.t, y = rig.y.t, rr = S0 * .32;
+      await c.tween(1050, u => { const a = u * TAU * 3; rig.x.t = x + Math.cos(a) * rr - rr; rig.y.t = y + Math.sin(a) * rr * .55; }, E.lin);
+      await c.go(x, y, { dur: 160, path: 'direct' });
+      if (chance(.6)) await tapEl(c, 'clock', 2, { ang: rnd(.3, .7) * PI }); else await c.wait(300);
+    },
+    // Gun twirl and holster: optional finish after finger guns.
+    async twirl(c) {
+      c.snd('glove-twirl');                                                                // cue 1: spin starts (2 turns in 520 ms)
+      const r0 = rig.roll.t; await c.tween(520, u => rig.roll.to(r0 + TAU * 2 * u, 900), E.out);
+      c.snd('glove-holster');                                                              // cue 2: holster drop (520 ms after cue 1)
+      await c.go(rig.x.t, rig.y.t + S0 * 1.3, { dur: 150, path: 'direct', ease: 'in', bank: 0 });
+      await c.wait(260);
     },
     // ---- big win extras
     async conductBow(c) {
@@ -911,6 +1070,33 @@ const Glove = (() => {
       for (let i = 0; i < 3 + Math.floor(rnd(0, 3)); i++) { await c.wait(rnd(300, 800)); const f = Math.floor(rnd(0, 4)); c.finger(f, [1.0, .8, .4], 500); await c.wait(110); c.finger(f, [.5, .6, .4], 200); }
       c.hov(1);
     },
+    // Stretch: slow full splay with a wrist roll, release, then shake it out.
+    async stretch(c) {
+      await show(c, { pose: 'relax', which: 'middle', ang: -PI / 2 + rnd(-.2, .2), yaw: PI + rnd(-.25, .25), pitch: 0, z: .4, speed: 500 });
+      c.snd('glove-stretch', { hold: true });                                              // cue: one file, ~2.4 s: stretch 0 to 1.3 s, relax, shake out 1.8 to 2.4 s
+      const r0 = rig.roll.t, s = sgn(); c.pose('splay', 16); c.scale(1.1, 18); c.orient(r0 + s * .5, null, -.3, 14); c.trem(.25);
+      await c.wait(1300); c.trem(0);
+      c.pose('relax', 40); c.scale(1, 40); c.orient(r0, null, 0, 40); await c.wait(500);
+      c.pose('limp', 220);                                                                 // (shake out, same file)
+      await c.tween(600, u => rig.roll.to(r0 + Math.sin(u * TAU * 5) * .45 * (1 - u), 700), E.lin);
+      c.pose('relax', 80);
+    },
+    // Stroll: index and middle walk like two legs along the table edge.
+    async stroll(c) {
+      const r = pickEl('table'); if (!r) return IDLE.drift(c);
+      const dir = sgn(), y = r.top - S0 * .05, xa = W / 2 - dir * W * rnd(.18, .36), stride = S0 * .42, steps = 5 + Math.floor(rnd(0, 4));
+      c.over(false); c.pose('legs', 100); c.orient(PI - dir * .12, rnd(-.25, .25), -.25, 80);   // upside down: fingers are the legs
+      await c.goPt('middle', xa, y, { speed: 700, z: .2, path: pathPick() });
+      c.hov(.1); c.breath(0);
+      for (let i = 0; i < steps; i++) {
+        const lift = i % 2, plant = 1 - lift;
+        c.finger(lift, [.75, 1.0, .45], 700); c.finger(plant, [.08, .14, .08], 500);
+        await c.go(rig.x.t + dir * stride, rig.y.t, { dur: 240, path: 'arc', bend: .25, side: -dir, ease: 'sine', bank: 0, z: .2 });
+        c.finger(lift, [.12, .16, .1], 900);
+        const tp = c.tip(lift ? 'middle' : 'index'); c.snd('glove-step', { vol: .7 }, tp[0]); // cue: footfall every 240 ms
+      }
+      c.hov(1); c.breath(1); c.pose('relax', 80); await c.wait(rnd(200, 500));
+    },
     async weave(c) {
       // over the header, under the table, back over: a figure through the HUD
       c.pose(any(['relax', 'claw', 'open']), 60); c.orient(rnd(-.5, .5), rnd(-.6, .6), 0, 40);
@@ -922,9 +1108,9 @@ const Glove = (() => {
       await c.goPt('mid', d[0], d[1], { speed: 520, z: .55, path: 's' });
     },
   };
-  const IDLE_W = { drift: 1.4, prowl: 1, creep: .8, peek: .9, drum: 1, flex: .8, knock: .5, inspect: 1.1, orbit: .8, loom: .45, shadowbox: .55, count: .35, conduct: 1, twiddle: .9, rest: .8, weave: .9 };
+  const IDLE_W = { stretch: .7, stroll: .8, drift: 1.4, prowl: 1, creep: .8, peek: .9, drum: 1, flex: .8, knock: .5, inspect: 1.1, orbit: .8, loom: .45, shadowbox: .55, count: .35, conduct: 1, twiddle: .9, rest: .8, weave: .9 };
   const AGIT = { shadowbox: 2, loom: 1.4, creep: 1.3, knock: 1.2, peek: 1.2 };
-  const CALM_IDLE = ['drift', 'twiddle', 'conduct', 'rest'];
+  const CALM_IDLE = ['drift', 'twiddle', 'conduct', 'rest', 'stretch'];
 
   // Roaming while a bonus game runs: over the overlay, circling the game box. Fingers reach in from outside,
   // the cuff points away, so the play area stays mostly free. No teleports: every move is a spring path.
@@ -1121,9 +1307,18 @@ const Glove = (() => {
     else {
       c.pose('splay', 600); c.depth(.75, 40); await c.wait(450);
       const r0 = rig.roll.t; await c.tween(900, u => rig.roll.to(r0 + Math.sin(u * TAU * 4) * .4 * (1 - u), 400), E.lin);
-      c.pose('limp', 90); for (let i = 0; i < 4; i++) { setFinger(Math.floor(rnd(0, 4)), [-.3, .1, .1], 900); await c.wait(70); } c.pose('relax', 80);
+      c.pose('limp', 90); for (let i = 0; i < 4; i++) { setFinger(Math.floor(rnd(0, 4)), [-.3, .1, .1], 900); await c.wait(70); }
+      if (plan.bucket === 'monster') await dizzy(c); else c.pose('relax', 80);
     }
     c.soft(); rig.x.k = rig.y.k = KP;
+  }
+  // Dizzy: after a monster spin the hand reels in shrinking circles, fingers limp, then shakes it off.
+  async function dizzy(c) {
+    c.pose('limp', 60); c.snd('glove-dizzy', { hold: true });                             // cue: one file, ~1.9 s: wobble 0 to 1.5 s, shake off 1.5 to 1.86 s
+    const x = clamp(rig.x.t, S0 * 2, W - S0 * 2), y = clamp(rig.y.t, S0 * 2, Hh - S0 * 2), r0 = rig.roll.t; c.trem(.15);
+    await c.tween(1500, u => { const a = u * TAU * 2.5, rr = S0 * .55 * (1 - u * .6); rig.x.t = x + Math.cos(a) * rr; rig.y.t = y + Math.sin(a) * rr * .5; rig.roll.to(r0 + Math.sin(a) * .45, 120); }, E.sine);
+    c.trem(0); c.pose('relax', 300);                                                       // (shake off, same file)
+    await c.tween(360, u => rig.roll.to(r0 + Math.sin(u * TAU * 3) * .3 * (1 - u), 800), E.lin);
   }
   // While the wheel turns (after the pull)
   const WATCH = {
@@ -1158,6 +1353,15 @@ const Glove = (() => {
       await c.tween(1e5, () => { const w2 = wheel(); if (w2) rig.roll.to(base + (w2.a - a0) * .35, 200); }, E.lin);
     },
     async twiddle(c) { await IDLE.twiddle(c); },
+    // Fingers crossed: hovers beside the wheel, pleading little bobs, shaking harder as the wheel slows.
+    async crossFingers(c) {
+      const w = wheel(); if (!w) return;
+      const s = sgn(); c.pose('cross', 140); c.orient(s * rnd(.1, .3), rnd(-.25, .25), .15, 70);
+      await c.goPt('mid', w.x + s * w.r * rnd(1.1, 1.3), w.y - w.r * rnd(.35, .75), { speed: 700, z: .45, path: pathPick() });
+      c.snd('glove-cross', { hold: true, loop: true, vol: .7 });                           // cue: loop until the wheel lands
+      const y = rig.y.t, t0 = now();
+      await c.tween(1e5, () => { const k = clamp(1 - (st.spinEnd - now()) / 4000, 0, 1); rig.trem.to(.08 + k * .7, 40); rig.y.t = y + Math.sin((now() - t0) / 1000 * (5 + k * 6)) * S0 * .08; }, E.lin);
+    },
     async leanIn(c) {
       const w = wheel(); if (!w) return;
       c.pose('claw', 60); c.aim('tips', PI / 2 + rnd(-.3, .3), rnd(-.2, .2), -.3, 60);
@@ -1169,20 +1373,20 @@ const Glove = (() => {
 
   // ---------------------------------------------------------------- Director
   const REACT = {
-    round: [['beckon', 1], ['presentTable', 1], ['snapPoint', .8], ['pointPlayer', .5], ['tapClock', .6], ['tapTickets', .7], ['wave', .4]],
-    bet: [['nodTap', 1], ['quickThumb', .8], ['rubMoney', 1], ['quickOk', .7]],
-    refused: [['wag', 1], ['thumbsDown', .8], ['punchHud', 1], ['palmNo', .8]],
-    ready: [['pointWheel', 1], ['snapPoint', .8], ['quickThumb', .6], ['rubMoney', .5]],
-    win: [['thumbsUp', 1], ['fingerGuns', 1], ['pointPlayer', .7], ['ok', .8], ['fistPump', 1], ['patWin', .8], ['peace', .4]],
-    bigwin: [['fistPump', 1], ['jazz', 1], ['fingerGuns', .8], ['thumbsUp', .6], ['conductBow', .8], ['patWin', .6]],
-    loss: [['thumbsDown', 1], ['wag', 1], ['laughPoint', 1], ['punchWheel', 1], ['punchHud', .8], ['palmNo', .6], ['shrug', .5]],
-    nobet: [['shrug', 1], ['tapTickets', 1], ['beckon', .8], ['pointHit', .7]],
+    round: [['beckon', 1], ['presentTable', 1], ['snapPoint', .8], ['pointPlayer', .5], ['tapClock', .6], ['tapTickets', .7], ['wave', .4], ['hurry', .6]],
+    bet: [['nodTap', 1], ['quickThumb', .8], ['rubMoney', 1], ['quickOk', .7], ['coinFlip', .8]],
+    refused: [['wag', 1], ['thumbsDown', .8], ['punchHud', 1], ['palmNo', .8], ['tableSlam', .6]],
+    ready: [['pointWheel', 1], ['snapPoint', .8], ['quickThumb', .6], ['rubMoney', .5], ['coinFlip', .6]],
+    win: [['thumbsUp', 1], ['fingerGuns', 1], ['pointPlayer', .7], ['ok', .8], ['fistPump', 1], ['patWin', .8], ['peace', .4], ['shaka', .6], ['chefKiss', .4]],
+    bigwin: [['fistPump', 1], ['jazz', 1], ['fingerGuns', .8], ['thumbsUp', .6], ['conductBow', .8], ['patWin', .6], ['chefKiss', .9], ['rockOn', 1]],
+    loss: [['thumbsDown', 1], ['wag', 1], ['laughPoint', 1], ['punchWheel', 1], ['punchHud', .8], ['palmNo', .6], ['shrug', .5], ['tableSlam', .9], ['sweep', .9]],
+    nobet: [['shrug', 1], ['tapTickets', 1], ['beckon', .8], ['pointHit', .7], ['hurry', .8]],
     landedBonus: [['jazz', 1], ['drumroll', 1], ['rubMoney', .8], ['snapPoint', .7], ['pointHit', .8]],
-    bonusWin: [['thumbsUp', 1], ['ok', 1], ['fistPump', 1], ['fingerGuns', .8], ['jazz', .6]],
+    bonusWin: [['thumbsUp', 1], ['ok', 1], ['fistPump', 1], ['fingerGuns', .8], ['jazz', .6], ['rockOn', .8], ['chefKiss', .6]],
     bonusLoss: [['middleSlow', 1], ['middleJab', 1], ['middleTurn', 1], ['middleRise', 1], ['middleDouble', .8]],
     bonusWatch: [['shrug', 1], ['wave', 1], ['peace', .7], ['beckon', .5]],
-    levelUp: [['fistPump', 1], ['thumbsUp', 1], ['countUp', .7], ['jazz', .6]],
-    join: [['wave', 1], ['pointPeople', 1]],
+    levelUp: [['fistPump', 1], ['thumbsUp', 1], ['countUp', .7], ['jazz', .6], ['rockOn', .8]],
+    join: [['wave', 1], ['pointPeople', 1], ['shaka', .8]],
     leave: [['wave', 1], ['thumbsDown', .4], ['shrug', .5]],
   };
   const OVER = new Set(['bonusWin', 'bonusLoss', 'bonusWatch', 'landedBonus']);
@@ -1194,7 +1398,7 @@ const Glove = (() => {
     const m = MOOD[type]; if (m) st.agit = clamp(st.agit + m[0], 0, 1);
     const pri = PRI[type] || 2;
     if (cur && cur.pri > pri) { queue.push({ type, d, exp: now() + (pri >= 4 ? 6000 : 2500), pri }); return; }
-    const name = pick('react:' + type, list.map(([n, w]) => [n, w * (CALM && /punch|jab/i.test(n) ? 0 : 1)]));
+    const name = pick('react:' + type, list.map(([n, w]) => [n, w * (CALM && /punch|jab|slam/i.test(n) ? 0 : 1)]));
     st.lastReact = now();
     run(type + ':' + name, async c => { c.over(OVER.has(type)); await (R[name] || IDLE[name])(c, { ...d, over: OVER.has(type) }); c.over(false); }, pri, d);
   }
@@ -1211,7 +1415,7 @@ const Glove = (() => {
     for (let i = 0; i < queue.length; i++) { const q = queue[i]; if (q.exp < tn) { queue.splice(i--, 1); continue; } queue.splice(i, 1); return react(q.type, q.d); }
     if (st.phase === 'spinning' && st.spinT0) {
       const late = st.spinEnd && st.spinEnd - tn < 1600;
-      const name = late ? 'leanIn' : pick('watch', [['conduct', st.spinPlan && st.spinPlan.k > .4 ? 1.3 : .5], ['hover', 1], ['clench', .8], ['mimic', st.spinPlan && st.spinPlan.k > .5 ? 1 : .4], ['twiddle', st.spinPlan && st.spinPlan.k < .3 ? 1.2 : .3]]);
+      const name = late ? 'leanIn' : pick('watch', [['conduct', st.spinPlan && st.spinPlan.k > .4 ? 1.3 : .5], ['hover', 1], ['clench', .8], ['mimic', st.spinPlan && st.spinPlan.k > .5 ? 1 : .4], ['twiddle', st.spinPlan && st.spinPlan.k < .3 ? 1.2 : .3], ['crossFingers', 1]]);
       run('watch:' + name, async c => { const job = WATCH[name](c); job.catch(() => {}); await Promise.race([job, c.until(() => (!late && st.spinEnd - now() < 1600) || st.phase !== 'spinning')]); }, 1);
       return;
     }

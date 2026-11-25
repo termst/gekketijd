@@ -32,6 +32,22 @@ const Sfx = (() => {
     'glove-wave':            { n: 1, v: .6, pj: .1, vj: .15, gap: 500, max: 1, soft: [.5, 10, 40] },
     'glove-wheel-grab':      { n: 3, v: .75, pj: .07, vj: .1, gap: 200, max: 2 },
     'glove-whoosh':          { n: 4, v: .55, pj: .12, vj: .2, gap: 140, max: 2, soft: [.5, 15, 60] },
+    // New Glove gestures, no samples yet. `todo` entries load nothing and play their fallback `fb` [group, opts] (or stay
+    // silent without one). To go live: add sfx/<group>-1.mp3 (-2, -3 ...), set n to the number of variants, delete todo.
+    'glove-coin-flick':      { n: 1, todo: 1, fb: ['glove-snap', { rate: 1.45, vol: .5 }], v: .65, pj: .06, vj: .1, gap: 300, max: 1 },
+    'glove-coin-catch':      { n: 1, todo: 1, fb: ['glove-clench', { rate: 1.2, vol: .8 }], v: .7, pj: .06, vj: .1, gap: 300, max: 1 },
+    'glove-kiss':            { n: 1, todo: 1, v: .7, pj: .05, vj: .1, gap: 1200, max: 1 },
+    'glove-rock':            { n: 1, todo: 1, v: .7, pj: .02, vj: .08, gap: 1500, max: 1, soft: [.4, 6, 25] },
+    'glove-shaka':           { n: 1, todo: 1, v: .65, pj: .05, vj: .1, gap: 1000, max: 1, soft: [.4, 6, 25] },
+    'glove-slam':            { n: 1, todo: 1, fb: ['glove-punch', { rate: .78, vol: 1.1 }], v: .85, pj: .06, vj: .1, gap: 150, max: 2 },
+    'glove-sweep':           { n: 1, todo: 1, fb: ['glove-whoosh', { rate: .8 }], v: .65, pj: .06, vj: .12, gap: 600, max: 1, soft: [.5, 10, 40] },
+    'glove-hurry':           { n: 1, todo: 1, fb: ['glove-whoosh', { rate: 1.3, vol: .5 }], v: .6, pj: .05, vj: .1, gap: 1000, max: 1, soft: [.4, 6, 25] },
+    'glove-twirl':           { n: 1, todo: 1, fb: ['glove-whoosh', { rate: 1.5, vol: .55 }], v: .6, pj: .08, vj: .12, gap: 400, max: 1 },
+    'glove-holster':         { n: 1, todo: 1, fb: ['glove-clench', { rate: .9 }], v: .65, pj: .06, vj: .1, gap: 400, max: 1 },
+    'glove-stretch':         { n: 1, todo: 1, v: .55, pj: .05, vj: .1, gap: 2500, max: 1, soft: [.6, 20, 80] },
+    'glove-step':            { n: 1, todo: 1, fb: ['glove-tap', { rate: 1.35, vol: .4 }], v: .45, pj: .12, vj: .25, gap: 60, max: 3 },
+    'glove-cross':           { n: 1, todo: 1, v: .5, pj: .03, vj: .08, gap: 1500, max: 1, soft: [.8, 40, 140] },
+    'glove-dizzy':           { n: 1, todo: 1, v: .6, pj: .04, vj: .1, gap: 2000, max: 1, soft: [.5, 10, 40] },
     'loss':                  { n: 2, v: .65, pj: .03, vj: .08, gap: 1500, max: 1, soft: [.5, 10, 50] },
     'wheel-land':            { n: 7, v: .75, pj: .03, vj: .08, gap: 600, max: 1, soft: [.3, 4, 15] },
     'wheel-land-settle':     { n: 5, v: .7, pj: .04, vj: .1, gap: 600, max: 1 },
@@ -62,7 +78,7 @@ const Sfx = (() => {
       .then(a => new Promise((ok, no) => ctx().decodeAudioData(a, ok, no))).then(b => buf[f] = b).catch(() => { buf[f] = null; });
     return pend[f];
   }
-  function preload(groups) { (groups || Object.keys(DEF)).forEach(g => DEF[g] && files(g).forEach(load)); }
+  function preload(groups) { (groups || Object.keys(DEF)).forEach(g => DEF[g] && !DEF[g].todo && files(g).forEach(load)); }
   // Shuffle bag: every variant plays once before any repeats, and a new bag never starts with the last one played.
   function pickFile(g) {
     const fl = files(g); if (fl.length === 1) return fl[0];
@@ -78,6 +94,7 @@ const Sfx = (() => {
   //    dur (ms, cut and fade), offset (ms), loop, force (ignore gap), file (exact variant)
   function play(g, o = {}) {
     const d = DEF[g]; if (!on || !d) return NOOP;
+    if (d.todo) { if (!d.fb) return NOOP; const f = d.fb[1] || {}; return play(d.fb[0], { ...o, ...f, vol: (o.vol ?? 1) * (f.vol ?? 1), rate: (o.rate || 1) * (f.rate || 1) }); }
     const t = performance.now();
     if (!o.force && t - (lastAt[g] || -1e9) < (d.gap || 0)) return NOOP;
     const vs = voices[g] || (voices[g] = []);
