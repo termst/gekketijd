@@ -33,6 +33,7 @@ Open http://localhost:8080. Node 18+, no `npm install`. The server reads `PORT` 
 - `public/net.js`: peer to peer transport for GitHub Pages mode.
 - `games/<category>/*.js`: 16 subgames. After changing one, run `node tools/bundle-games.js` to rebuild `public/games-bundle.js` for the browser.
 - `public/`: client, shared physics, renderers per category, `vendor/peerjs.min.js` (PeerJS 1.5.4, MIT).
+- `public/sfx/`: sound effects. `token_place.mp3` plays when a chip is placed, `no_tokens_left.mp3` when a bet is refused (not enough Orra or over the level limit).
 
 Testing with the Node server: `DEV=1 node server.js`, then `node bots.js ABCD 2` adds 2 bots to lobby ABCD.
 `node bots.js ABCD 2 ws://localhost:8080 tilt` forces a subgame (DEV only).

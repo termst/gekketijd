@@ -2,7 +2,9 @@
 // Drop Dead renderers: Puck Wars, Peg Builder, Slot Auction, Tilt
 (() => {
   const { G, esc, fx2, now, tone, drawBoard, track, smooth, secs } = RH;
-  const boardCanvas = (id, w = 'min(440px,88vw)') => `<canvas class="gc" id="${id}" width="600" height="720" style="width:${w}"></canvas>`;
+  // Boards are 600x720: width also follows the free height so the whole board fits on screen.
+  const fit = (w, h) => `min(${w},max(180px,calc((100dvh - ${h}px) * .833)))`;
+  const boardCanvas = (id, w = fit('440px,88vw', 330)) => `<canvas class="gc" id="${id}" width="600" height="720" style="width:${w}"></canvas>`;
   const worldX = (c, e) => { const r = c.getBoundingClientRect(); return [(e.clientX - r.left) / r.width * RHS.BW, (e.clientY - r.top) / r.height * RHS.BH]; };
 
   G.puckwars = {
@@ -63,7 +65,7 @@
 
   G.auction = {
     mount(el, st, api) {
-      el.innerHTML = `<p class="note" id="sa-note"></p><div class="grid" id="sa-g" style="grid-template-columns:repeat(8,1fr);width:min(720px,94vw)"></div><div class="row" id="sa-act"></div>${boardCanvas('sa-c', 'min(380px,80vw)')}`;
+      el.innerHTML = `<p class="note" id="sa-note"></p><div class="grid" id="sa-g" style="grid-template-columns:repeat(8,1fr);width:min(720px,94vw)"></div><div class="row" id="sa-act"></div>${boardCanvas('sa-c', fit('380px,80vw', 420))}`;
     },
     update(el, st, v, api) {
       st.v = v;
@@ -96,7 +98,7 @@
 
   G.tilt = {
     mount(el, st, api) {
-      el.innerHTML = `<p class="note" id="tl-note"></p><div class="row" id="tl-me"></div><div class="row" id="tl-act"></div><div class="row" id="tl-others" style="align-items:flex-start"></div>`;
+      el.innerHTML = `<p class="note" id="tl-note"></p><div class="row" id="tl-act"></div><div class="row tl-boards"><div id="tl-me"></div><div class="row tl-boards" id="tl-others"></div></div>`;
       st.pk = {};
       st.key = e => { if (e.key === 'ArrowLeft' || e.key === 'a') api.send({ nudge: -1 }); if (e.key === 'ArrowRight' || e.key === 'd') api.send({ nudge: 1 }); };
       addEventListener('keydown', st.key);
@@ -106,13 +108,13 @@
       if (!st.built) {
         st.built = true;
         const mine = api.players.find(p => p.id === api.me);
-        el.querySelector('#tl-me').innerHTML = mine ? `<div><b>Your board</b>${boardCanvas('tl-' + mine.id, 'min(340px,80vw)')}</div>` : '';
-        el.querySelector('#tl-others').innerHTML = api.players.filter(p => p.id !== api.me).map(p => `<div><b style="color:${p.color}">${esc(p.name)}</b>${boardCanvas('tl-' + p.id, mine ? '150px' : '220px')}${mine ? `<div class="row"><button class="btn sm" data-r="${p.id}" data-d="-1">Nudge left</button><button class="btn sm" data-r="${p.id}" data-d="1">Nudge right</button></div>` : ''}</div>`).join('');
+        el.querySelector('#tl-me').innerHTML = mine ? `<div class="tl-board"><b>Your board</b>${boardCanvas('tl-' + mine.id, fit('340px,80vw', 400))}</div>` : '';
+        el.querySelector('#tl-others').innerHTML = api.players.filter(p => p.id !== api.me).map(p => `<div class="tl-board"><b style="color:${p.color}">${esc(p.name)}</b>${boardCanvas('tl-' + p.id, mine ? '150px' : fit('220px', 400))}${mine ? `<div class="row"><button class="btn sm" data-r="${p.id}" data-d="-1">Nudge left</button><button class="btn sm" data-r="${p.id}" data-d="1">Nudge right</button></div>` : ''}</div>`).join('');
         el.querySelectorAll('[data-r]').forEach(b => b.onclick = () => api.send({ nudge: +b.dataset.d, board: b.dataset.r }));
       }
       const u = v.used[api.me] || 0, act = el.querySelector('#tl-act');
       if (api.part && v.phase !== 'done') {
-        act.innerHTML = `<button class="btn go" data-n="-1">Tilt left</button><span class="big" style="font-size:28px">${u}/3</span><button class="btn go" data-n="1">Tilt right</button>`;
+        act.innerHTML = `<button class="btn go" data-n="-1">Tilt left</button><span class="big" style="font-size:28px;min-width:60px">${u}/3</span><button class="btn go" data-n="1">Tilt right</button>`;
         act.querySelectorAll('[data-n]').forEach(b => b.onclick = () => { api.send({ nudge: +b.dataset.n }); tone(250, .15, .08); });
       } else act.innerHTML = '';
       el.querySelectorAll('[data-r]').forEach(b => b.disabled = v.rival[api.me] || v.phase !== 'live');

@@ -2,7 +2,7 @@
 // Productivitime renderers: Flapper Draft, Paint the Wheel, Push Your Luck, Brake Battle
 (() => {
   const { G, esc, fx2, now, tone, segWheel, spinPos, secs } = RH;
-  const wheelCanvas = (id, w = 'min(460px,86vw)') => `<canvas class="gc" id="${id}" width="640" height="640" style="width:${w}"></canvas>`;
+  const wheelCanvas = (id, w = 'min(460px,86vw,max(200px,calc(100dvh - 360px)))') => `<canvas class="gc" id="${id}" width="640" height="640" style="width:${w}"></canvas>`;
   const SEGC = v => v === 'DOUBLE' ? '#c9a14a' : v === 'TRIPLE' ? '#7a3fc0' : v === 'BUST' ? '#d01818' : v >= 100 ? '#0d7558' : v >= 50 ? '#b65f30' : v >= 20 ? '#1c4f9e' : '#3d2013';
   const label = v => typeof v === 'number' ? v + 'x' : v === 'DOUBLE' ? 'x2' : v === 'TRIPLE' ? 'x3' : v;
   const FCOL = ['#2fbf5a', '#3a8ee8', '#f2c230', '#a35ae8'];
@@ -19,7 +19,7 @@
       if (v.phase === 'draft') {
         note.textContent = `Draft order (lowest balance first): ${v.order.map(api.name).join(', ')}. ${v.turn ? api.name(v.turn) + ' is picking.' : ''}`;
         if (v.turn === api.me) {
-          act.innerHTML = v.names.map((n, k) => `<button class="btn" data-k="${k}" style="box-shadow:inset 0 0 0 3px ${FCOL[k]}">${n} (${Object.keys(v.pick).filter(id => v.pick[id] === k).length} on it)</button>`).join('');
+          act.innerHTML = v.names.map((n, k) => `<button class="btn" data-k="${k}" style="box-shadow:inset 0 0 0 3px ${FCOL[k]}">${n}<small class="note">${Object.keys(v.pick).filter(id => v.pick[id] === k).length} on it</small></button>`).join('');
           act.querySelectorAll('[data-k]').forEach(b => b.onclick = () => api.send({ flapper: +b.dataset.k }));
           if (!st.beep) { st.beep = 1; tone(700, .2); }
         }
@@ -67,17 +67,17 @@
   };
 
   G.push = {
-    mount(el) { el.innerHTML = `<p class="note" id="pl-note"></p>${wheelCanvas('pl-c', 'min(400px,80vw)')}<div class="row" id="pl-act"></div><table class="res" id="pl-t"></table>`; },
+    mount(el) { el.innerHTML = `<p class="note" id="pl-note"></p>${wheelCanvas('pl-c', 'min(400px,80vw,max(200px,calc(100dvh - 470px)))')}<div class="row" id="pl-act"></div><table class="res" id="pl-t"></table>`; },
     update(el, st, v, api) {
       st.v = v;
       const act = el.querySelector('#pl-act'), mine = v.mine, inn = v.inn[api.me];
       act.innerHTML = '';
       if (v.phase === 'decide' && api.part) {
         if (inn) {
-          act.innerHTML = `<button class="btn go" data-c="stay" ${mine.choice === 'stay' ? 'style="outline:3px solid #fff"' : ''}>Stay (x next spin)</button><button class="btn" data-c="cash" ${mine.choice === 'cash' ? 'style="outline:3px solid #fff"' : ''}>Cash out ${fx2(v.r[api.me])}x</button><label class="note"><input type="checkbox" id="pl-cu" ${mine.curse ? 'checked' : ''}> and buy a Curse (25%)</label>`;
+          act.innerHTML = `<button class="btn go ${mine.choice === 'stay' ? 'sel' : ''}" data-c="stay">Stay for the next spin</button><button class="btn ${mine.choice === 'cash' ? 'sel' : ''}" data-c="cash">Cash out ${fx2(v.r[api.me])}x</button><label class="note chk"><input type="checkbox" id="pl-cu" ${mine.curse ? 'checked' : ''}> Also buy a Curse (25%)</label>`;
           act.querySelectorAll('[data-c]').forEach(b => b.onclick = () => api.send({ choice: b.dataset.c, curse: el.querySelector('#pl-cu').checked }));
         } else if (v.r[api.me] > 0) {
-          act.innerHTML = `<button class="btn" id="pl-curse">${mine.curse ? 'Curse bought (undo)' : 'Buy a Curse card for 25%: +1 BUST'}</button>`;
+          act.innerHTML = `<button class="btn ${mine.curse ? 'sel' : ''}" id="pl-curse">${mine.curse ? 'Curse bought (undo)' : 'Buy a Curse card for 25%: +1 BUST'}</button>`;
           el.querySelector('#pl-curse').onclick = () => api.send({ curse: !mine.curse });
         }
       }
@@ -93,7 +93,7 @@
 
   G.brake = {
     mount(el, st, api) {
-      el.innerHTML = `<p class="note" id="bb-note"></p>${wheelCanvas('bb-c')}<button class="btn go" id="bb-b">BRAKE (space)</button><div class="row" id="bb-act"></div>`;
+      el.innerHTML = `<p class="note" id="bb-note"></p>${wheelCanvas('bb-c', 'min(460px,86vw,max(200px,calc(100dvh - 430px)))')}<button class="btn go" id="bb-b">BRAKE (space)</button><div class="row" id="bb-act"></div>`;
       const press = () => { api.send({ brake: true }); tone(180, .3, .1); };
       el.querySelector('#bb-b').onclick = press;
       st.key = e => { if (e.code === 'Space' && document.getElementById('bb-b')) { e.preventDefault(); press(); } };
