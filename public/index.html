@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Rare Hours</title>
+<title>Gekke Tijd</title>
 <link rel="preload" href="fonts/escargoth.ttf" as="font" type="font/ttf" crossorigin>
 <link rel="stylesheet" href="style.css">
 </head>
@@ -12,24 +12,34 @@
 
 <section id="lobby">
   <div class="card">
-    <h1 class="logo">Rare Hours</h1>
-    <p class="sub">Multiplayer wheel of fortune. Play money only: <span class="orra-inline"></span> Orra has no real value.</p>
-    <label>Your name<input id="nm" maxlength="16" autocomplete="nickname" placeholder="Name"></label>
-    <div id="joinbox" class="grp">
-      <h3>Join a lobby</h3>
-      <div class="line"><input id="jc" maxlength="4" placeholder="CODE" class="code" autocomplete="off"><button class="btn go" id="jb">Join</button></div>
+    <h1 class="logo">GEKKE TIJD</h1>
+    <div class="life" aria-label="Lifetime stats">
+      <div class="won"><small>Won</small><b><span class="orra-inline"></span><span id="lwon">0</span></b></div>
+      <div class="lost"><small>Lost</small><b><span class="orra-inline"></span><span id="llost">0</span></b></div>
     </div>
-    <div class="grp">
-      <h3>Create a lobby</h3>
-      <label class="chk"><input type="checkbox" id="cc"> Choose my own 4 character code</label>
-      <div class="line"><input id="cv" maxlength="4" placeholder="ABCD" class="code" autocomplete="off" disabled><button class="btn go" id="cb">Create</button></div>
+    <div id="home" class="view">
+      <label>Your name<input id="nm" maxlength="16" autocomplete="nickname" placeholder="Name"></label>
+      <div id="joinbox" class="grp">
+        <h3>Join a lobby</h3>
+        <div class="line"><input id="jc" maxlength="4" placeholder="CODE" class="code" autocomplete="off" aria-label="Lobby code"><button class="btn go" id="jb">Join</button></div>
+      </div>
+      <div class="grp">
+        <h3>Create a lobby</h3>
+        <div class="line"><input id="cv" maxlength="4" placeholder="RANDOM" class="code" autocomplete="off" aria-label="Own lobby code, leave empty for a random code"><button class="btn go" id="cb">Create</button></div>
+        <p class="hint">Type 4 letters or digits for your own code, or leave it empty for a random one.</p>
+      </div>
+    </div>
+    <div id="setup" class="view" hidden>
+      <div class="shead"><h3>Run settings</h3><span class="scode" id="scode"></span></div>
+      <div id="opts" class="opts"></div>
+      <div class="sacts"><button class="btn" id="sback">Back</button><button class="btn" id="sreset">Defaults</button><button class="btn go" id="sgo">Open lobby</button></div>
     </div>
     <p id="lerr" role="alert"></p>
   </div>
 </section>
 
 <section id="game" hidden>
-<header><h1 class="logo">Rare Hours</h1>
+<header><h1 class="logo">GEKKE TIJD</h1>
   <div class="tools">
     <span class="roomchip" title="Lobby code"><small>Lobby</small><b id="room"></b><button class="btn sm" id="invite">Copy invite</button></span>
     <span class="sep"></span>

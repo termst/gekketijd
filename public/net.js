@@ -36,10 +36,10 @@ const RHNet = (() => {
       if (m.t === 'hello') {
         token = String(m.token || '').slice(0, 64) || randToken(); name = clean(m.name);
         const p = loadProf();
-        return emit({ t: 'hello', token, name, bal: p ? p.bal : 500 });
+        return emit({ t: 'hello', token, name, bal: p ? p.bal : 500, won: (p && p.won) || 0, lost: (p && p.lost) || 0 });
       }
       if (!token) return;
-      if (m.t === 'create') return host(String(m.code || '').toUpperCase().trim(), !m.code);
+      if (m.t === 'create') { ss.set('rh-cfg', JSON.stringify(m.cfg || {})); return host(String(m.code || '').toUpperCase().trim(), !m.code); }
       if (m.t === 'join') return join(String(m.code || '').toUpperCase().trim());
     }
 
@@ -66,7 +66,8 @@ const RHNet = (() => {
     function startHost(peer, code) {
       const db = { profiles: {} };
       const core = RHCore({ RHS, GAMES: RHGames, db, dev: false, save: () => { if (H && H.token) saveProf(db.profiles[H.token]); } });
-      const room = new core.Room(code);
+      let cfg = null; try { cfg = JSON.parse(ss.get('rh-cfg') || 'null'); } catch {}
+      const room = new core.Room(code, cfg);   // run settings survive a host reload via sessionStorage
       core.rooms.set(code, room);
       ss.set('rh-host', code);
       H = { code, peer, core, room, db, ready: true, token: null, me: null, conn: null, emit: null };
@@ -80,7 +81,7 @@ const RHNet = (() => {
       };
       H.local = m => {
         if (m.t === 'ping') return H.emit({ t: 'pong', c: m.c, s: Date.now() });
-        if (m.t === 'hello') return H.emit({ t: 'hello', token: H.token, name: H.me.name, bal: H.me.prof.bal });
+        if (m.t === 'hello') return H.emit({ t: 'hello', token: H.token, name: H.me.name, bal: H.me.prof.bal, won: H.me.prof.won, lost: H.me.prof.lost });
         if (m.t === 'create' || m.t === 'join') return;
         room.handle(H.me, m);
       };
@@ -97,7 +98,7 @@ const RHNet = (() => {
             tok = String(m.token || '').slice(0, 64) || randToken(); nm = clean(m.name);
             if (m.prof && typeof m.prof.bal === 'number' && !(me && me.prof)) db.profiles[tok] = m.prof;
             const pr = core.profile(tok, nm);
-            return c.send({ t: 'hello', token: tok, name: nm, bal: pr.bal });
+            return c.send({ t: 'hello', token: tok, name: nm, bal: pr.bal, won: pr.won, lost: pr.lost });
           }
           if (!tok) return;
           if (m.t === 'create' || m.t === 'join') {

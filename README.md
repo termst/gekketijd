@@ -1,4 +1,4 @@
-# Rare Hours (gekketijd)
+# Gekke Tijd (gekketijd)
 
 Multiplayer wheel game with 16 minigames. Play money only (Orra), no real money.
 
@@ -6,15 +6,18 @@ Multiplayer wheel game with 16 minigames. Play money only (Orra), no real money.
 
 **https://termst.github.io/gekketijd/**
 
-1. Enter a name and click **Create**. Your browser is now the host of the lobby.
-2. Click **Copy invite link** and send it to friends (or give them the 4 character code).
-3. Friends open the link and click **Join**. Up to 8 players.
+1. Enter a name. Type a 4 character code or leave the code field empty for a random one, then click **Create**.
+2. Pick the run settings (starting balance, betting time, wheel spin time, bet limit, late buy-ins, Prime Minute, max players) and click **Open lobby**. Your browser is now the host of the lobby.
+3. Click **Copy invite link** and send it to friends (or give them the 4 character code).
+4. Friends open the link and click **Join**. Up to 8 players.
 
 How it works: everything runs on GitHub Pages, no server or account needed. The lobby creator's browser runs the game, the other players connect to it directly (peer to peer, WebRTC). The free PeerJS service is only used to find each other.
 
 Good to know:
 - The host must keep the game tab open. If the host closes it, the lobby ends. Keep the host tab visible: browsers slow down timers in background tabs.
-- Balances, level and items are saved in each player's own browser (localStorage).
+- Balances, level, items and lifetime Won and Lost totals are saved in each player's own browser (localStorage). Won is the profit on winning fields, Lost is every stake on fields that did not hit.
+- A run with a fixed starting balance gives every player the same fresh balance for that lobby only. Your saved wallet is untouched and the Cashier is closed during that run.
+- The chip stack badge between each group of 4 tickets bets the selected chip on all 4 fields. Other players' bets show on each ticket as their colour token, the first 2 letters of their name and the amount.
 - Some strict networks (school, office, some mobile carriers) block peer to peer connections. Then try another network or a phone hotspot.
 
 ## Bonus games: backers and late buy-ins
