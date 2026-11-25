@@ -6,13 +6,15 @@
 <title>Gekke Tijd</title>
 <link rel="preload" href="fonts/escargoth.ttf" as="font" type="font/ttf" crossorigin>
 <link rel="stylesheet" href="style.css">
+<link rel="icon" type="image/webp" href="img/logo-sm.webp">
+<link rel="preload" href="img/logo.webp" as="image">
 </head>
 <body>
 <svg id="scene" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true"></svg>
 
 <section id="lobby">
   <div class="card">
-    <h1 class="logo">GEKKE TIJD</h1>
+    <h1 class="logo"><img src="img/logo.webp" alt="Gekke Tijd" width="1008" height="598"></h1>
     <div class="life" aria-label="Lifetime stats">
       <div class="won"><small>Won</small><b><span class="orra-inline"></span><span id="lwon">0</span></b></div>
       <div class="lost"><small>Lost</small><b><span class="orra-inline"></span><span id="llost">0</span></b></div>
@@ -40,7 +42,7 @@
 </section>
 
 <section id="game" hidden>
-<header><h1 class="logo">GEKKE TIJD</h1>
+<header><h1 class="logo"><img src="img/logo-sm.webp" alt="Gekke Tijd" width="504" height="299"></h1>
   <div class="tools">
     <span class="roomchip" title="Lobby code"><small>Lobby</small><b id="room"></b><button class="btn sm" id="invite">Copy invite</button></span>
     <span class="sep"></span>
