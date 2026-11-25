@@ -1073,11 +1073,11 @@ const Glove = (() => {
     // Stretch: slow full splay with a wrist roll, release, then shake it out.
     async stretch(c) {
       await show(c, { pose: 'relax', which: 'middle', ang: -PI / 2 + rnd(-.2, .2), yaw: PI + rnd(-.25, .25), pitch: 0, z: .4, speed: 500 });
-      c.snd('glove-stretch', { hold: true });                                              // cue 1: stretch starts, holds 1300 ms
+      c.snd('glove-stretch', { hold: true });                                              // cue: one file, ~2.4 s: stretch 0 to 1.3 s, relax, shake out 1.8 to 2.4 s
       const r0 = rig.roll.t, s = sgn(); c.pose('splay', 16); c.scale(1.1, 18); c.orient(r0 + s * .5, null, -.3, 14); c.trem(.25);
       await c.wait(1300); c.trem(0);
       c.pose('relax', 40); c.scale(1, 40); c.orient(r0, null, 0, 40); await c.wait(500);
-      c.pose('limp', 220);                                                                 // cue 2: shake out, 1800 ms after cue 1, lasts 600 ms
+      c.pose('limp', 220);                                                                 // (shake out, same file)
       await c.tween(600, u => rig.roll.to(r0 + Math.sin(u * TAU * 5) * .45 * (1 - u), 700), E.lin);
       c.pose('relax', 80);
     },
@@ -1314,10 +1314,10 @@ const Glove = (() => {
   }
   // Dizzy: after a monster spin the hand reels in shrinking circles, fingers limp, then shakes it off.
   async function dizzy(c) {
-    c.pose('limp', 60); c.snd('glove-dizzy', { hold: true });                             // cue 1: wobble starts, 1500 ms
+    c.pose('limp', 60); c.snd('glove-dizzy', { hold: true });                             // cue: one file, ~1.9 s: wobble 0 to 1.5 s, shake off 1.5 to 1.86 s
     const x = clamp(rig.x.t, S0 * 2, W - S0 * 2), y = clamp(rig.y.t, S0 * 2, Hh - S0 * 2), r0 = rig.roll.t; c.trem(.15);
     await c.tween(1500, u => { const a = u * TAU * 2.5, rr = S0 * .55 * (1 - u * .6); rig.x.t = x + Math.cos(a) * rr; rig.y.t = y + Math.sin(a) * rr * .5; rig.roll.to(r0 + Math.sin(a) * .45, 120); }, E.sine);
-    c.trem(0); c.pose('relax', 300);                                                       // cue 2: shake off, 1500 ms after cue 1, lasts 360 ms
+    c.trem(0); c.pose('relax', 300);                                                       // (shake off, same file)
     await c.tween(360, u => rig.roll.to(r0 + Math.sin(u * TAU * 3) * .3 * (1 - u), 800), E.lin);
   }
   // While the wheel turns (after the pull)
