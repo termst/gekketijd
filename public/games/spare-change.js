@@ -32,7 +32,7 @@
     update(el, st, v, api) {
       el.querySelector('#sb-t').innerHTML = '<tr><th>Player</th><th>Streak</th><th>Banked</th><th>Calls</th><th></th></tr>' + v.order.map(id => {
         const s = v.S[id];
-        return `<tr class="${id === api.me ? 'me' : ''}" style="${id === v.turn ? 'background:#e6c67322' : ''}"><td><span class="pdot" style="--c:${api.color(id)}"></span>${esc(api.name(id))}${id === v.turn ? ' (turn)' : ''}</td><td class="n">${s.streak}x</td><td class="n">${s.banked}x</td><td class="n">${s.calls}/${v.max}</td><td>${s.done ? 'banked' : s.forced ? `must call ${s.forced}` : ''}</td></tr>`;
+        return `<tr class="${id === api.me ? 'me' : ''} ${id === v.turn ? 'turn' : ''}"><td><span class="pdot" style="--c:${api.color(id)}"></span>${esc(api.name(id))}${id === v.turn ? ' (turn)' : ''}</td><td class="n">${s.streak}x</td><td class="n">${s.banked}x</td><td class="n">${s.calls}/${v.max}</td><td>${s.done ? 'banked' : s.forced ? `must call ${s.forced}` : ''}</td></tr>`;
       }).join('');
       if (v.last) {
         coinFlip(el, v.last.res, v.last.at + 1300);
@@ -43,7 +43,7 @@
       if (v.turn === api.me && !v.busy && s) {
         const rivals = v.order.filter(id => id !== api.me && !v.S[id].done);
         act.innerHTML = `<button class="side red" data-c="red">CALL RED</button><button class="side blue" data-c="blue">CALL BLUE</button>
-          <div><button class="btn go" id="sb-bank" ${s.streak > 0 && !s.forced ? '' : 'disabled'}>Bank ${s.streak}x</button><br><label class="note">Pass the coin to <select id="sb-pass"><option value="">nobody</option>${rivals.map(id => `<option value="${id}">${esc(api.name(id))}</option>`).join('')}</select></label></div>`;
+          <div style="display:grid;gap:6px"><button class="btn go" id="sb-bank" ${s.streak > 0 && !s.forced ? '' : 'disabled'}>Bank ${s.streak}x</button><label class="note">Then pass the coin to <select id="sb-pass"><option value="">nobody</option>${rivals.map(id => `<option value="${id}">${esc(api.name(id))}</option>`).join('')}</select></label></div>`;
         act.querySelectorAll('[data-c]').forEach(b => b.onclick = () => api.send({ call: b.dataset.c }));
         el.querySelector('#sb-bank').onclick = () => api.send({ bank: true, pass: el.querySelector('#sb-pass').value || null });
         if (!st.beeped) { tone(700, .2); st.beeped = true; }
@@ -64,7 +64,7 @@
       const list = el.querySelector('#cd-list');
       if (!st.built) {
         st.built = true;
-        list.innerHTML = v.duels.map((d, i) => `<div><div class="row"><b style="color:#ff8a8a">${esc(api.name(d.red))}</b> vs <b style="color:#8ab8ff">${esc(api.name(d.blue))}</b></div><canvas class="gc" width="560" height="60" data-i="${i}"></canvas><p class="note" data-r="${i}"></p></div>`).join('');
+        list.innerHTML = v.duels.map((d, i) => `<div class="duel"><div class="vs"><span class="r">${esc(api.name(d.red))}</span> <span class="note">vs</span> <span class="b">${esc(api.name(d.blue))}</span></div><canvas class="gc" width="560" height="60" data-i="${i}" style="width:100%;box-shadow:none"></canvas><p class="note" data-r="${i}"></p></div>`).join('');
       }
       v.duels.forEach((d, i) => {
         const r = el.querySelector(`[data-r="${i}"]`);
@@ -106,14 +106,15 @@
       const ctl = el.querySelector('#wc-ctl'), locked = v.locked.includes(api.me);
       if (v.phase === 'bid' && api.part && !locked) {
         if (!ctl.querySelector('input')) {
-          ctl.innerHTML = `<label>Points <input type="range" min="0" max="${v.points}" value="${st.pts}" id="wc-pts"></label><b id="wc-pv"></b><button class="btn go" id="wc-lock">Lock bid</button>`;
+          ctl.innerHTML = `<label class="chk">Points <input type="range" min="0" max="${v.points}" value="${st.pts}" id="wc-pts" style="width:180px;min-height:0;accent-color:var(--gold)"></label><b id="wc-pv" style="min-width:220px"></b><button class="btn go" id="wc-lock">Lock bid on ${st.side.toUpperCase()}</button>`;
           const upd = () => { st.pts = +el.querySelector('#wc-pts').value; el.querySelector('#wc-pv').textContent = `${st.pts} pts (+${st.pts * 5}%), keep ${v.points - st.pts} = ${fx2((v.points - st.pts) * .5)}x`; };
           el.querySelector('#wc-pts').oninput = upd; upd();
           el.querySelector('#wc-lock').onclick = () => api.send({ side: st.side, pts: st.pts, lock: true });
         }
+        el.querySelector('#wc-lock').textContent = 'Lock bid on ' + st.side.toUpperCase();
       } else ctl.innerHTML = v.phase === 'bid' ? `<p class="note">Locked: ${v.locked.map(api.name).join(', ') || 'nobody yet'}</p>` : '';
       if (v.chance !== null) {
-        el.querySelector('#wc-odds').innerHTML = `<div style="display:flex;width:min(420px,90vw);height:22px;margin:auto"><div style="background:var(--red);width:${v.chance * 100}%;font-size:12px">${Math.round(v.chance * 100)}%</div><div style="background:var(--blue);flex:1;font-size:12px">${Math.round((1 - v.chance) * 100)}%</div></div>`;
+        el.querySelector('#wc-odds').innerHTML = `<div class="odds"><div class="r" style="width:${v.chance * 100}%">RED ${Math.round(v.chance * 100)}%</div><div class="b">BLUE ${Math.round((1 - v.chance) * 100)}%</div></div>`;
         coinFlip(el, v.flipSide, v.flipAt);
       }
       el.querySelector('#wc-note').textContent = v.flip ? `${v.flip.toUpperCase()} wins. Unspent points pay 0.5x each.` : v.phase === 'bid' ? 'Every point adds +5% to your side, and is spent whether you win or not.' : 'Flipping with the weighted odds...';

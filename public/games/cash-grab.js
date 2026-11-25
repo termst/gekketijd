@@ -83,7 +83,7 @@
 
   G.ricochet = {
     mount(el, st, api) {
-      el.innerHTML = `<p class="note" id="rc-note"></p><canvas class="gc" id="rc-c" width="600" height="800" style="width:min(420px,88vw);cursor:crosshair"></canvas><div class="row"><button class="btn" id="rc-l">Left</button><button class="btn go" id="rc-lock">Lock shot</button><button class="btn" id="rc-r">Right</button></div>`;
+      el.innerHTML = `<p class="note" id="rc-note"></p><canvas class="gc" id="rc-c" width="600" height="800" style="width:min(420px,88vw,max(200px,calc((100dvh - 400px) * .75)));cursor:crosshair"></canvas><div class="row"><button class="btn" id="rc-l">Left</button><button class="btn go" id="rc-lock">Lock shot</button><button class="btn" id="rc-r">Right</button></div>`;
       const c = el.querySelector('#rc-c'); st.aim = 0; st.sentT = 0; st.anim = {};
       const set = a => { st.aim = Math.max(-75, Math.min(75, a)); const t = performance.now(); if (t - st.sentT > 60) { st.sentT = t; api.send({ aim: st.aim }); } };
       c.onpointermove = e => { if (!st.live) return; const r = c.getBoundingClientRect(), x = (e.clientX - r.left) / r.width * 600, y = (e.clientY - r.top) / r.height * 800; set(Math.atan2(x - RHS.GUN.x, RHS.GUN.y - y) * 180 / Math.PI); };
