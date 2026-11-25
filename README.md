@@ -17,6 +17,19 @@ Good to know:
 - Balances, level and items are saved in each player's own browser (localStorage).
 - Some strict networks (school, office, some mobile carriers) block peer to peer connections. Then try another network or a phone hotspot.
 
+## Bonus games: backers and late buy-ins
+
+The wheel pays 1, 2, 5 and 10 to 1 on the number fields.
+
+When the wheel lands on a bonus field, players who bet on it (backers) always play. Everyone else online gets a 7 second buy-in window:
+
+- Late cap: 25% to 50% of the top backer's stake (`0.25 + 0.25 * backers / players`), never below one 5 chip, within balance and the level limit left this round.
+- Late joiners collect 60% of their multiplier and get no Prime Minute boost.
+- Backers move first (biggest stake first) and get an Edge Shield that blocks the first attack from a late joiner, without using up a real Shield.
+- The window closes early once every eligible player has bought in or pressed Watch.
+
+Tuning lives at the top of `public/core.js` (`JOIN_MS`, `LATE_PAY`, `lateShare`). Subgames can read `ctx.backer(pid)` and `ctx.late(pid)` for game specific edges.
+
 ## Optional: run your own server
 
 The Node server still works and does not need the peer to peer layer:

@@ -3,7 +3,7 @@
 const RH = (() => {
   const $ = id => document.getElementById(id), TAU = Math.PI * 2;
   const { TYPES, KEYS, DIAL, BONUS_KEYS } = RHS, N = DIAL.length;
-  const FONT = '"Roboto Condensed","Arial Narrow",Arial,sans-serif', CALM = matchMedia('(prefers-reduced-motion:reduce)').matches;
+  const FONT = '"Escargoth","Arial Narrow",Arial,sans-serif', CALM = matchMedia('(prefers-reduced-motion:reduce)').matches;
   const fmt = n => Math.round(n).toLocaleString('en-US');
   const fx2 = n => (Math.round(n * 100) / 100).toLocaleString('en-US');
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -233,7 +233,8 @@ const RH = (() => {
 <li>Prime Minute: each round one field gets a x2, x3 or x5 boost on its winnings.</li></ul>
 <div class="pays">${KEYS.map(k => { const t = TYPES[k]; return `<div style="--c:${t.c}">${t.n}<small>${t.pay ? 'pays ' + t.pay + ' : 1' : 'Bonus game'}</small></div>`; }).join('')}</div></section>
 <section class="rsec"><h3>Bonus games</h3><ul>
-<li>You only play a bonus game if you bet on its field. Everyone else watches live.</li>
+<li>Backers (players who bet on the field before the spin) always play, with the full edge: full multiplier, Prime Minute boost, the first turns and an Edge Shield against late joiners.</li>
+<li>Everyone else gets a short buy-in window. You can buy in for up to 25% to 50% of the top backer's stake (more when more of the table backed it). Late joiners collect 60% of their multiplier.</li>
 <li>A bonus pays the multiplier you finish with, plus your bet back.</li>
 <li>Shields and Swap tokens you win stay with you between games.</li></ul></section>`;
     for (const k of BONUS_KEYS) h += `<section class="rsec" style="--accent:${ACCENT[k]}"><h3><span class="cat">${CAT_NAMES[k]}</span></h3><p class="note">One of these 4 is picked at random.</p><div class="gl">${(catalog[k] || []).map(g => `<details><summary>${esc(g.name)}</summary><ul>${g.rules.map(r => `<li>${esc(r)}</li>`).join('')}</ul></details>`).join('')}</div></section>`;
@@ -312,14 +313,38 @@ const RH = (() => {
     const box = () => $('box');
     const rulesList = rules => `<ol class="brules">${rules.map(r => `<li>${esc(r)}</li>`).join('')}</ol>`;
     const accent = cat => box().style.setProperty('--accent', ACCENT[cat] || 'var(--gold)');
+    // Intro doubles as the buy-in window. Built once per round, then patched so the slider keeps its value.
+    let introKey = '';
     function intro(m) {
-      const n = m.next, part = !!(players[m.you].bets[n.cat]);
-      const who = m.players.filter(p => p.bets[n.cat]).map(p => `<span class="bp ${p.id === m.you ? 'me' : ''}" style="--c:${p.color}"><i></i>${esc(p.name)}</span>`).join('');
+      const n = m.next, k = m.round + ':' + n.id, backer = n.backers.includes(m.you), late = n.late.includes(m.you);
       accent(n.cat);
-      box().innerHTML = `<div class="intro"><span class="cat">${CAT_NAMES[n.cat]}</span><h2>${esc(n.name)}</h2>
-        <span class="badge ${part ? 'in' : 'watch'}">${part ? 'You are in. Get ready.' : 'Spectating: you did not bet on this field'}</span>
-        ${rulesList(n.rules)}<div class="bplayers">${who}</div><div class="bt"><i></i></div></div>`;
-      $('bonus').classList.add('on'); cur = null; last = null; tone(440, .5);
+      if (introKey !== k) {
+        introKey = k; cur = null; last = null;
+        const dur = Math.max(500, m.ends - now());
+        box().innerHTML = `<div class="intro"><span class="cat">${CAT_NAMES[n.cat]}</span><h2>${esc(n.name)}</h2>
+          <span class="badge"></span><div class="buyin" hidden></div>
+          ${rulesList(n.rules)}<div class="bplayers"></div><div class="bt" style="--dur:${dur}ms"><i></i></div></div>`;
+        $('bonus').classList.add('on'); tone(440, .5);
+        if (n.cap) {
+          const bx = box().querySelector('.buyin'), start = Math.min(n.cap, Math.max(5, Math.round(n.cap / 2 / 5) * 5));
+          bx.hidden = false;
+          bx.innerHTML = `<p class="bihead">Buy in late, up to <b>${orra(n.cap)}</b> <small>(${Math.round(n.share * 100)}% of the top stake ${orra(n.top)})</small></p>
+            <div class="birow"><input type="range" id="biamt" min="5" max="${n.cap}" step="5" value="${start}" aria-label="Buy-in amount"><b id="bival">${orra(start)}</b></div>
+            <div class="birow"><button class="btn go" id="bigo">Buy in</button><button class="btn" id="bipass">Watch</button></div>
+            <p class="note">Late entry: ${Math.round(n.latePay * 100)}% of your multiplier, no Prime Minute boost, you move after the backers and their Edge Shields block your first attack.</p>`;
+          const r = $('biamt');
+          r.oninput = () => { $('bival').innerHTML = orra(+r.value); tone(520 + +r.value / n.cap * 300, .03, .02); };
+          $('bigo').onclick = () => { send({ t: 'buyin', amt: +r.value }); sfx('token_place'); };
+          $('bipass').onclick = () => send({ t: 'buyin', pass: true });
+        }
+      }
+      const bx = box().querySelector('.buyin');
+      if (bx && !n.cap) bx.hidden = true;
+      const badge = box().querySelector('.badge');
+      badge.className = 'badge ' + (backer ? 'in' : late ? 'in late' : 'watch');
+      badge.textContent = backer ? 'You backed this field. Full edge.' : late ? 'You bought in late. Get ready.' : n.cap ? 'You did not back this field' : 'Spectating';
+      box().querySelector('.bplayers').innerHTML = m.players.filter(p => p.bets[n.cat]).sort((a, b) => n.late.includes(a.id) - n.late.includes(b.id) || b.bets[n.cat] - a.bets[n.cat])
+        .map(p => `<span class="bp ${p.id === m.you ? 'me' : ''}" style="--c:${p.color}"><i></i>${esc(p.name)}<small>${ORRA}${fmt(p.bets[n.cat])}</small><span class="tag ${n.late.includes(p.id) ? '' : 'ok'}">${n.late.includes(p.id) ? 'Late' : 'Backer'}</span></span>`).join('');
     }
     function api(m) {
       return {
@@ -344,7 +369,7 @@ const RH = (() => {
         if (r) r.mount(inst.el, inst.st, api(m));
       }
       if (m.ends !== span.ends) span = { ends: m.ends, tot: Math.max(1000, m.ends - now()) };
-      box().querySelector('.bplayers').innerHTML = m.players.map(p => `<span class="bp ${p.id === m.me ? 'me' : ''}" style="--c:${p.color}"><i></i>${esc(p.name)}<small>${ORRA}${fmt(p.stake)}</small>${p.shield ? `<span class="tag" title="Shields">Shield ${p.shield}</span>` : ''}${p.swap ? `<span class="tag" title="Swap tokens">Swap ${p.swap}</span>` : ''}</span>`).join('') + (m.part ? '' : '<span class="bp watch">You are spectating</span>');
+      box().querySelector('.bplayers').innerHTML = m.players.map(p => `<span class="bp ${p.id === m.me ? 'me' : ''}" style="--c:${p.color}"><i></i>${esc(p.name)}<small>${ORRA}${fmt(p.stake)}</small>${p.late ? '<span class="tag" title="Bought in late">Late</span>' : ''}${p.edge ? '<span class="tag ok" title="Blocks the first attack from a late joiner">Edge</span>' : ''}${p.shield ? `<span class="tag" title="Shields">Shield ${p.shield}</span>` : ''}${p.swap ? `<span class="tag" title="Swap tokens">Swap ${p.swap}</span>` : ''}</span>`).join('') + (m.part ? '' : '<span class="bp watch">You are spectating</span>');
       const lk = m.log.join('\n');
       if (lk !== logKey) { logKey = lk; box().querySelector('.blog').innerHTML = m.log.map(l => `<li>${esc(l)}</li>`).join(''); }
       if (r) try { r.update(inst.el, inst.st, m.v, api(m)); } catch (e) { console.error(e); }
@@ -368,11 +393,11 @@ const RH = (() => {
       const pl = id => players[id] || { name: '?', color: '#888' };
       box().insertAdjacentHTML('beforeend', `<div class="final"><div class="fcard"><span class="cat">${CAT_NAMES[m.results.key]}</span><h3>${esc(last ? last.name : 'Bonus')} results</h3>
         ${mine ? `<p class="mine ${mine.win > 0 ? 'win' : ''}">You finished at ${fx2(mine.m)}x and collect ${orra(mine.win)}</p>` : '<p class="note">You watched this one.</p>'}
-        <table class="res"><tr><th>Player</th><th class="n">Result</th><th class="n">Stake</th><th class="n">Collect</th></tr>${rows.map(r => `<tr class="${r.id === m.you ? 'me' : ''}"><td><span class="pdot" style="--c:${pl(r.id).color}"></span>${esc(pl(r.id).name)}</td><td class="n">${fx2(r.m)}x</td><td class="n">${fmt(r.stake)}</td><td class="n">${orra(r.win)}</td></tr>`).join('')}</table>
+        <table class="res"><tr><th>Player</th><th class="n">Result</th><th class="n">Stake</th><th class="n">Collect</th></tr>${rows.map(r => `<tr class="${r.id === m.you ? 'me' : ''}"><td><span class="pdot" style="--c:${pl(r.id).color}"></span>${esc(pl(r.id).name)}${r.late ? ' <span class="tag">Late</span>' : ''}</td><td class="n">${fx2(r.m)}x</td><td class="n">${fmt(r.stake)}</td><td class="n">${orra(r.win)}</td></tr>`).join('')}</table>
         <button class="btn go" id="bclose">Back to the table</button></div></div>`);
       const b = $('bclose'); if (b) { b.onclick = close; b.focus(); }
     }
-    function close() { $('bonus').classList.remove('on'); cur = null; inst = null; last = null; }
+    function close() { $('bonus').classList.remove('on'); cur = null; inst = null; last = null; introKey = ''; }
     return { intro, update, fx, tick, results, close };
   })();
 
@@ -450,6 +475,6 @@ const RH = (() => {
   const coinHtml = () => '<div class="persp"><div class="coin3d"><div class="f">RED</div><div class="b">BLUE</div></div></div>';
   const secs = ends => Math.max(0, Math.ceil((ends - now()) / 1000));
 
-  function boot() { scenery(); lobby(); connect(); document.querySelectorAll('.orra-inline').forEach(e => e.innerHTML = ORRA); }
+  function boot() { if (document.fonts) document.fonts.ready.then(() => S && draw()); scenery(); lobby(); connect(); document.querySelectorAll('.orra-inline').forEach(e => e.innerHTML = ORRA); }
   return { boot, G, h: esc, esc, fmt, fx2, ORRA, orra, now, tone, segWheel, spinPos, drawBoard, track, smooth, coinFlip, coinHtml, secs, toast, FONT, TAU, metal, disc };
 })();

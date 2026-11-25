@@ -8,9 +8,9 @@
   // ---- Main wheel ----
   const TYPES = {
     one:    { n: '1',  pay: 1,  c: '#1c4f9e', d: '#0d2855', t: '#fff' },
-    three:  { n: '3',  pay: 3,  c: '#b65f30', d: '#5f2a10', t: '#fff' },
-    seven:  { n: '7',  pay: 7,  c: '#0d7558', d: '#053a2c', t: '#fff' },
-    twelve: { n: '12', pay: 12, c: '#eadfc8', d: '#a3947a', t: '#1b1430' },
+    two:    { n: '2',  pay: 2,  c: '#b65f30', d: '#5f2a10', t: '#fff' },
+    five:   { n: '5',  pay: 5,  c: '#0d7558', d: '#053a2c', t: '#fff' },
+    ten:    { n: '10', pay: 10, c: '#eadfc8', d: '#a3947a', t: '#1b1430' },
     spare:  { n: 'Spare Change',   c: '#8e1f3a', d: '#430a19', t: '#fff' },
     grab:   { n: 'Cash Grab',      c: '#e0a136', d: '#80520c', t: '#241203' },
     drop:   { n: 'Drop Dead',      c: '#0b7d90', d: '#033b47', t: '#fff' },
@@ -18,13 +18,13 @@
   };
   const KEYS = Object.keys(TYPES);
   const BONUS_KEYS = ['spare', 'grab', 'drop', 'prod'];
-  const BORING = ['one', 'three'];
+  const BORING = ['one', 'two'];
   // 48 fields, same layout as the base game with the bonus fields renamed:
   // Spare Change x4, Cash Grab x2, Drop Dead x2, Productivitime x1
-  const DIAL = ('prod one three one seven one spare three one twelve one three ' +
-    'one grab one three seven one spare one three one drop one ' +
-    'three one twelve one seven one spare three one three one grab ' +
-    'one seven one drop three one spare one seven three one twelve').split(' ');
+  const DIAL = ('prod one two one five one spare two one ten one two ' +
+    'one grab one two five one spare one two one drop one ' +
+    'two one ten one five one spare two one two one grab ' +
+    'one five one drop two one spare one five two one ten').split(' ');
 
   // ---- Seeded RNG (mulberry32) ----
   function rng(seed) {
