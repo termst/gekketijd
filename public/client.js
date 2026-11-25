@@ -65,17 +65,33 @@ const RH = (() => {
 
   // ---- Lobby screen ----
   // Run settings shown when creating a lobby. Values mirror RUN_OPTS in core.js, which checks them again.
+  // Each row: key, label, hint, options, modes it shows in. Battle keeps its stack in `stack`, sent as `start`.
+  const STORM_EVERY = { slow: 6, normal: 4, fast: 3 };
   const RUN = [
-    ['start', 'Starting balance', 'Own wallet: play with your saved Orra. Fixed amount: everyone starts equal, part of each win goes to your wallet.', [[0, 'Own wallet'], [500, '500'], [1000, '1K'], [2500, '2.5K'], [5000, '5K'], [10000, '10K']]],
-    ['bet', 'Betting time', 'Seconds per round to bet.', [5, 8, 12, 15, 20, 30].map(v => [v, v + 's'])],
-    ['spin', 'Wheel spin time', 'Time before the wheel lands.', [['short', 'Short 2-4s'], ['normal', 'Normal 3-7s'], ['long', 'Long 6-10s']]],
-    ['limit', 'Max bet per round', 'Level limit grows with your level.', [['level', 'Level limit'], ['none', 'No limit']], 1],
-    ['late', 'Late buy-ins', 'Join bonus games you did not bet on.', [['on', 'On'], ['off', 'Off']], 1],
-    ['boost', 'Prime Minute', '1 field per round pays x2 to x5.', [['on', 'On'], ['off', 'Off']], 1],
-    ['max', 'Max players', 'Including you.', [2, 3, 4, 5, 6, 7, 8].map(v => [v, String(v)])]
+    ['start', 'Starting balance', 'Own wallet: your saved Orra. Fixed: same start for all, part of each win is saved.', [[0, 'Own wallet'], [500, '500'], [1000, '1K'], [2500, '2.5K'], [5000, '5K'], [10000, '10K']], 'classic'],
+    ['limit', 'Max bet per round', 'The level limit grows as you level up.', [['level', 'Level limit'], ['none', 'No limit']], 'classic'],
+    ['stack', 'Stack', 'Everyone starts with this.', [[500, '500'], [1000, '1K'], [2500, '2.5K'], [5000, '5K']], 'battle'],
+    ['target', 'Win at', 'First to reach this amount wins.', c => [2, 3, 5].map(v => [v, short(c.stack * v) + ' (x' + v + ')']), 'battle'],
+    ['storm', 'Storm', 'Ante every round, it climbs every few rounds.', [['slow', 'Slow'], ['normal', 'Normal'], ['fast', 'Fast']], 'battle'],
+    ['bet', 'Betting time', 'Seconds per round to place bets.', [5, 8, 12, 15, 20, 30].map(v => [v, v + 's'])],
+    ['spin', 'Wheel spin', 'Time before the wheel lands.', [['short', '2 to 4s'], ['normal', '3 to 7s'], ['long', '6 to 10s']]],
+    ['late', 'Late buy-ins', 'Join bonus games you did not bet on.', [['on', 'On'], ['off', 'Off']]],
+    ['boost', 'Prime Minute', 'One field per round pays x2 to x5.', [['on', 'On'], ['off', 'Off']]],
+    ['max', 'Players', 'Maximum, including you.', [2, 3, 4, 5, 6, 7, 8].map(v => [v, String(v)])]
   ];
-  const RUN_DEF = { start: 0, bet: 8, spin: 'normal', limit: 'level', late: 'on', boost: 'on', max: 8 };
+  const MODES = [
+    ['classic', 'Classic', 'Play the wheel at your own pace. Levels, Cashier and your own wallet.'],
+    ['battle', 'Battle', 'Same stack for all. First to the target wins, the Storm drains the rest.']
+  ];
+  const RUN_DEF = { mode: 'classic', start: 0, bet: 8, spin: 'normal', limit: 'level', late: 'on', boost: 'on', max: 8, stack: 1000, target: 3, storm: 'normal' };
   let runCfg = (() => { try { const c = JSON.parse(store.get('rh-cfg') || 'null'); return { ...RUN_DEF, ...(c || {}) }; } catch { return { ...RUN_DEF }; } })();
+  const runSend = () => { const c = { ...runCfg }; if (c.mode === 'battle') { c.start = c.stack; c.limit = 'none'; } delete c.stack; return c; };
+  const anteNow = c => Math.max(5, Math.round(c.stack * .01 / 5) * 5);
+  function runSummary(c) {
+    const spin = { short: 'short', normal: 'normal', long: 'long' }[c.spin];
+    if (c.mode === 'battle') return `${short(c.stack)} each, first to <b>${short(c.stack * c.target)}</b> wins. Ante starts at ${anteNow(c)} and climbs every ${STORM_EVERY[c.storm]} rounds. Up to ${c.max} players.`;
+    return `${c.start ? short(c.start) + ' each' : 'Own wallet'}, ${c.limit === 'none' ? 'no bet limit' : 'level bet limit'}, ${c.bet}s to bet, ${spin} spins. Up to ${c.max} players.`;
+  }
   function lifeStats(won, lost) { $('lwon').textContent = fmt(won || 0); $('llost').textContent = fmt(lost || 0); }
   function lobby() {
     const q = new URLSearchParams(location.search), j = (q.get('join') || '').toUpperCase().slice(0, 4);
@@ -85,12 +101,18 @@ const RH = (() => {
     const name = () => { myName = $('nm').value.trim().slice(0, 16); if (!myName) { $('lerr').textContent = 'Enter a name first.'; $('nm').focus(); return false; } store.set('rh-name', myName); send({ t: 'hello', token, name: myName }); return true; };
     const view = v => { $('home').hidden = v !== 'home'; $('setup').hidden = v !== 'setup'; $('lobby').classList.toggle('wide', v === 'setup'); $('lerr').textContent = ''; };
     const opts = () => {
-      $('opts').innerHTML = RUN.map(([k, t, d, vals, half]) => `<div class="opt${half ? ' half' : ''}"><div class="olab"><b>${t}</b><small>${d}</small></div><div class="seg" role="radiogroup" aria-label="${t}">${vals.map(([v, l]) => `<button type="button" role="radio" data-k="${k}" data-v="${v}" aria-checked="${runCfg[k] === v}" class="${runCfg[k] === v ? 'on' : ''}">${l}</button>`).join('')}</div></div>`).join('');
-      $('opts').querySelectorAll('.seg button').forEach(b => b.onclick = () => {
-        const k = b.dataset.k, row = RUN.find(r => r[0] === k), v = row[3].find(x => String(x[0]) === b.dataset.v)[0];
-        runCfg[k] = v; store.set('rh-cfg', JSON.stringify(runCfg)); tone(520, .04, .03); opts();
+      const c = runCfg, rows = RUN.filter(r => !r[4] || r[4] === c.mode);
+      $('opts').innerHTML = `<div class="modes" role="radiogroup" aria-label="Game mode">${MODES.map(([v, t, d]) => `<button type="button" role="radio" class="mode ${v}${c.mode === v ? ' on' : ''}" data-k="mode" data-v="${v}" aria-checked="${c.mode === v}"><b>${t}</b><small>${d}</small></button>`).join('')}</div>
+        <div class="rows">${rows.map(([k, t, d, vals]) => { vals = typeof vals === 'function' ? vals(c) : vals; return `<div class="orow"><div class="olab"><b>${t}</b><small>${d}</small></div><div class="seg" role="radiogroup" aria-label="${t}">${vals.map(([v, l]) => `<button type="button" role="radio" data-k="${k}" data-v="${v}" aria-checked="${c[k] === v}" class="${c[k] === v ? 'on' : ''}">${l}</button>`).join('')}</div></div>`; }).join('')}</div>
+        <p class="osum">${runSummary(c)}</p>`;
+      $('opts').querySelectorAll('[data-k]').forEach(b => b.onclick = () => {
+        const k = b.dataset.k;
+        let v = b.dataset.v;
+        if (k !== 'mode') { const row = RUN.find(r => r[0] === k && (!r[4] || r[4] === runCfg.mode)), vals = typeof row[3] === 'function' ? row[3](runCfg) : row[3]; v = vals.find(x => String(x[0]) === v)[0]; }
+        runCfg[k] = v; store.set('rh-cfg', JSON.stringify(runCfg)); tone(k === 'mode' ? 440 : 520, .04, .03); opts();
         $('opts').querySelector(`[data-k="${k}"][data-v="${b.dataset.v}"]`).focus();
       });
+      $('sgo').textContent = c.mode === 'battle' ? 'Open battle lobby' : 'Open lobby';
     };
     let pickCode = '';
     $('cb').onclick = () => {
@@ -101,10 +123,10 @@ const RH = (() => {
       view('setup'); opts(); $('sgo').focus();
     };
     $('sback').onclick = () => { view('home'); $('cv').focus(); };
-    $('sreset').onclick = () => { runCfg = { ...RUN_DEF }; store.set('rh-cfg', JSON.stringify(runCfg)); opts(); };
+    $('sreset').onclick = () => { runCfg = { ...RUN_DEF, mode: runCfg.mode }; store.set('rh-cfg', JSON.stringify(runCfg)); opts(); };
     $('sgo').onclick = () => {
       if (!name()) { view('home'); return; }
-      $('lerr').textContent = 'Opening lobby...'; roomCode = null; setTimeout(() => send({ t: 'create', code: pickCode, cfg: runCfg }), 50);
+      $('lerr').textContent = 'Opening lobby...'; roomCode = null; setTimeout(() => send({ t: 'create', code: pickCode, cfg: runSend() }), 50);
     };
     $('jb').onclick = () => {
       if (!name()) return;
@@ -429,6 +451,7 @@ const RH = (() => {
   function canBet(n, el) {
     const me = S.me, avail = me.bal - myTot, need = chip * n;
     const deny = t => { sfx('no_tokens_left'); if (G_) G_.emit('refused'); toast(t, 2600, 'bad'); el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake'); return false; };
+    if (S.battle && !players[S.you].alive) return deny('You are out of this battle.');
     if (avail < 5) return deny(S.me.cashier.closed ? 'No Orra left in this run.' : 'No Orra left. Collect more at the Cashier.');
     if (need > avail) return deny(n > 1 ? `All 4 needs ${fmt(need)} Orra. You have ${fmt(avail)}.` : `Only ${fmt(avail)} Orra left. Use a smaller chip.`);
     if (myTot + need > me.limit) return deny(`Level ${me.lvl} limit: ${fmt(me.limit)} Orra per round.`);
@@ -493,6 +516,7 @@ const RH = (() => {
 <li><b>Items:</b> Shields and Swap tokens carry over between games.</li></ul></section></div><div class="rcol"><p class="note">Each bonus field plays 1 of its 4 games, picked at random.</p>`;
     for (const k of BONUS_KEYS) h += `<section class="rsec" style="--accent:${ACCENT[k]}"><h3><span class="cat">${CAT_NAMES[k]}</span></h3><div class="gl">${(catalog[k] || []).map(g => `<details><summary>${esc(g.name)}</summary><ul class="brules">${g.rules.map(ruleLi).join('')}</ul></details>`).join('')}</div></section>`;
     h += '</div></div><p class="note">Orra is play money with no real value.</p>';
+    if (S && S.battle) h = Battle.rules(S) + h;
     $('rulebody').innerHTML = h;
   }
   // 'Label: text' renders the label in bold so rules scan fast.
@@ -516,13 +540,16 @@ const RH = (() => {
       if (!first) { const was = Object.keys(players0), ids = m.players.filter(p => p.online).map(p => p.id); if (ids.some(i => !was.includes(i))) G_.emit('join'); else if (was.some(i => !ids.includes(i))) G_.emit('leave'); }
       players0 = {}; m.players.forEach(p => { if (p.online) players0[p.id] = 1; });
     }
-    const me = players[m.you], betting = m.phase === 'betting', ready = me.ready;
+    const me = players[m.you], betting = m.phase === 'betting', out = !!m.battle && !me.alive, ready = me.ready || out;
     $('room').textContent = m.code; $('lvl').innerHTML = `<b>Level ${m.me.lvl}<small>${fmt(m.me.xp)} / ${fmt(m.me.need)} XP</small></b><span class="meter"><i style="width:${Math.min(100, m.me.xp / m.me.need * 100)}%"></i></span>`;
     if ($('work').open) shop();
     // players strip
-    $('people').innerHTML = m.players.map(p => {
-      const tot = Object.values(p.bets).reduce((a, b) => a + b, 0);
-      return `<span class="pl ${p.online ? '' : 'off'} ${p.ready && betting ? 'ready' : ''} ${p.id === m.you ? 'me' : ''}" style="--c:${p.color}"><i></i><b>${esc(p.name)}</b><small>${ORRA}${fmt(p.bal - (betting ? tot : 0))}</small>${tot ? `<span class="tag">bet ${fmt(tot)}</span>` : ''}${p.ready && betting ? '<span class="tag ok">READY</span>' : ''}${p.shield ? `<span class="tag" title="Shields">S${p.shield}</span>` : ''}${p.swap ? `<span class="tag" title="Swap tokens">W${p.swap}</span>` : ''}</span>`;
+    // In a battle the strip also shows who is out, who leads and how close everyone is to the target.
+    const B = m.battle, live = B && m.phase !== 'wait', lead = live ? m.players.filter(p => p.alive).sort((a, b) => b.bal - a.bal)[0] : null;
+    $('people').innerHTML = m.players.filter(p => !live || p.alive || p.place || p.online).map(p => {
+      const tot = Object.values(p.bets).reduce((a, b) => a + b, 0), dead = live && !p.alive;
+      const prog = live && p.alive ? `<span class="prog" title="${fmt(p.bal)} of ${fmt(B.target)}"><i style="width:${Math.min(100, p.bal / B.target * 100).toFixed(1)}%"></i></span>` : '';
+      return `<span class="pl ${p.online ? '' : 'off'} ${p.ready && betting ? 'ready' : ''} ${p.id === m.you ? 'me' : ''} ${dead ? 'out' : ''}" style="--c:${p.color}"><i></i><b>${esc(p.name)}</b>${dead ? `<span class="tag bad">${p.place ? 'Out #' + p.place : 'Watching'}</span>` : `<small>${ORRA}${fmt(p.bal - (betting ? tot : 0))}</small>`}${lead && lead.id === p.id && m.players.filter(q => q.alive).length > 1 ? '<span class="tag lead">Lead</span>' : ''}${live && B.underdog === p.id && p.alive ? '<span class="tag" title="Lowest stack: skips the ante this round">Underdog</span>' : ''}${p.ko ? `<span class="tag" title="Knockouts">KO ${p.ko}</span>` : ''}${tot && !dead ? `<span class="tag">bet ${fmt(tot)}</span>` : ''}${p.ready && betting && !dead ? '<span class="tag ok">READY</span>' : ''}${p.shield ? `<span class="tag" title="Shields">S${p.shield}</span>` : ''}${p.swap ? `<span class="tag" title="Swap tokens">W${p.swap}</span>` : ''}${prog}</span>`;
     }).join('');
     // fields
     const mine = me.bets || {}, tot = Object.values(mine).reduce((a, b) => a + b, 0);
@@ -544,7 +571,7 @@ const RH = (() => {
     });
     $('bal').textContent = fmt(m.me.bal - (betting ? tot : 0)); $('bet').textContent = fmt(tot);
     $('clear').disabled = !betting || ready || !tot; $('again').disabled = !betting || ready || !m.me.hasLast;
-    $('go').disabled = !betting || ready; $('go').textContent = betting ? (ready ? 'Waiting' : tot ? 'Ready' : 'Sit out') : m.phase === 'spinning' ? 'Spinning' : 'Wait';
+    $('go').disabled = !betting || ready; $('go').textContent = out ? 'Out' : betting ? (ready ? 'Waiting' : tot ? 'Ready' : 'Sit out') : m.phase === 'spinning' ? 'Spinning' : 'Wait';
     document.querySelectorAll('.coin').forEach(b => { b.disabled = !betting || ready; b.classList.toggle('short', betting && +b.dataset.v > m.me.bal - tot); });
     // spin
     if (m.phase === 'spinning' && m.spin && spinKey !== m.spin.at) { spinKey = m.spin.at; spinTo(m.spin); }
@@ -562,6 +589,9 @@ const RH = (() => {
       else if (row) msg = `${t.n}. No bet on this field.`;
       if (row && row.lvl) msg += ` Level up! +${row.lvl} Orra.`;
       if (row && row.vault) msg += ` +${fmt(row.vault)} saved to your wallet.`;
+      const br = m.results.battle;
+      if (br && br.taker) msg += br.taker === m.you ? ` You take the Pot: ${fmt(br.pot)}.` : ` ${players[br.taker] ? players[br.taker].name : 'Someone'} takes the Pot.`;
+      if (br && br.ko.length) msg += ` Out: ${br.ko.join(', ')}.`;
       $('win').textContent = fmt(row ? row.win : 0); $('win').parentNode.classList.toggle('up', !!(row && row.win > 0));
       const key2 = m.round + ':' + key;
       if (row && lastWinShown !== key2) {
@@ -587,11 +617,77 @@ const RH = (() => {
     if (G_ && m.phase === 'landed' && lastPhase === 'spinning' && m.results && !m.results.rows.length) G_.emit('payout', { stake: 0, win: 0 });
     if (m.phase === 'spinning' && lastPhase === 'betting') Sfx.play('bets-closed');
     if (m.phase === 'betting' && lastRound !== m.round) { lastRound = m.round; tone(660, .4); }
+    if (out && m.phase !== 'over') msg = me.place ? `You are out in place ${me.place}. ${m.phase === 'payout' ? msg : 'Watching the rest.'}` : 'Battle in progress. You join the next one.';
     say(msg);
+    Battle.ui(m);
     if (m.phase === 'intro' && m.next) Bonus.intro(m);
     if (m.phase === 'betting') Bonus.close();
     lastPhase = m.phase;
   }
+
+  // ---- Battle mode: waiting room, status bar, end screen ----
+  const Battle = (() => {
+    let key = '';
+    const box = () => $('abox');
+    const P = id => players[id] || { name: '?', color: '#888' };
+    const host = m => P(m.host).name;
+    function rules(m) {
+      const B = m.battle, c = m.cfg;
+      return `<section class="rsec battle-rules"><h3>Battle</h3><ul class="brules">
+<li><b>Goal:</b> everyone starts with ${fmt(c.start)}. First to ${fmt(B.target)} wins, or be the last one standing.</li>
+<li><b>Storm:</b> every round each player still in pays the ante into the Pot. It starts at ${fmt(Math.max(5, Math.round(c.start * .01 / 5) * 5))} and climbs every ${B.every} rounds.</li>
+<li><b>Pot:</b> the biggest net winner of the round takes the whole Pot. Nobody up, it carries over.</li>
+<li><b>Underdog:</b> with 3 or more players left, the lowest stack skips the ante.</li>
+<li><b>Knockout:</b> under 5 Orra after a round or an ante and you are out. The Pot taker of that round gets the KO.</li>
+<li><b>Prize:</b> saved to your wallet. Winner 100 per opponent, the rest 20 per player they outlasted. Level up rewards also go to the wallet.</li></ul></section>`;
+    }
+    const RULES = [['Storm', 'Ante every round, it climbs every few rounds'], ['Pot', 'Biggest net winner of the round takes it'], ['Underdog', 'Lowest stack skips the ante (3+ left)'], ['Knockout', 'Under 5 Orra and you are out']];
+    function wait(m) {
+      const on = m.players.filter(p => p.online), isHost = m.host === m.you, B = m.battle;
+      return `<div class="acard"><span class="cat">Battle lobby ${esc(m.code)}</span><h2>Waiting room</h2>
+        <p class="lead">${short(m.cfg.start)} each. First to <b>${short(B.target)}</b> wins, or be the last one standing.</p>
+        <div class="arules">${RULES.map(([t, d]) => `<div><b>${t}</b><small>${d}</small></div>`).join('')}</div>
+        <div class="aplayers"><small>${on.length} of ${m.cfg.max} players</small><div>${on.map(p => `<span class="bp ${p.id === m.you ? 'me' : ''}" style="--c:${p.color}"><i></i>${esc(p.name)}${p.id === m.host ? '<span class="tag">Host</span>' : ''}</span>`).join('')}</div></div>
+        <div class="aacts"><button class="btn" data-a="invite">Copy invite</button>${isHost ? `<button class="btn go" data-a="start" ${on.length < 2 ? 'disabled' : ''}>${on.length < 2 ? 'Need 2 players' : 'Start battle'}</button>` : `<p class="note">Waiting for ${esc(host(m))} to start.</p>`}</div></div>`;
+    }
+    function over(m) {
+      const B = m.battle, st = B.standings || [], mine = st.find(r => r.id === m.you), w = P(B.winner), isHost = m.host === m.you;
+      const th = n => n === 1 ? '1st' : n === 2 ? '2nd' : n === 3 ? '3rd' : n + 'th';
+      return `<div class="acard"><span class="cat">Battle over after ${B.n} rounds</span><h2>${B.winner === m.you ? 'You win' : esc(w.name) + ' wins'}</h2>
+        ${mine ? `<p class="lead">You finished ${th(mine.place)}${mine.prize ? ` and saved ${orra(mine.prize)} to your wallet` : ''}.</p>` : '<p class="lead">You watched this one.</p>'}
+        <table class="res"><tr><th>#</th><th>Player</th><th class="n">Stack</th><th class="n">KO</th><th class="n">Prize</th></tr>${st.map(r => `<tr class="${r.id === m.you ? 'me' : ''}"><td>${r.place}</td><td><span class="pdot" style="--c:${P(r.id).color}"></span>${esc(P(r.id).name)}</td><td class="n">${fmt(r.run)}</td><td class="n">${r.ko}</td><td class="n">${r.prize ? orra(r.prize) : '0'}</td></tr>`).join('')}</table>
+        <div class="aacts"><button class="btn" data-a="leave">Leave</button>${isHost ? `<button class="btn go" data-a="start" ${m.players.filter(p => p.online).length < 2 ? 'disabled' : ''}>Rematch</button>` : `<p class="note">Waiting for ${esc(host(m))} to start a rematch.</p>`}</div></div>`;
+    }
+    function bar(m) {
+      const B = m.battle, toNext = B.every - ((B.n - 1) % B.every), maxed = B.storm >= B.maxStorm - 1;
+      return `<div><small>Round</small><b>${B.n}</b></div>
+        <div><small>Win at</small><b>${orra(B.target)}</b></div>
+        <div class="storm"><small>Storm ${B.storm + 1}</small><b>Ante ${fmt(B.ante)}</b><em>${maxed ? 'Max level' : `${fmt(B.nextAnte)} ${toNext === 1 ? 'next round' : 'in ' + toNext + ' rounds'}`}</em></div>
+        <div class="pot"><small>Pot</small><b>${orra(B.pot)}</b></div>
+        <div><small>Left</small><b>${B.alive} / ${m.players.filter(p => p.alive || p.place).length}</b></div>
+        ${B.log[0] ? `<p class="blast">${esc(B.log[0])}</p>` : ''}`;
+    }
+    function ui(m) {
+      document.body.classList.toggle('battle', !!m.battle);
+      const B = m.battle, show = B && (m.phase === 'wait' || m.phase === 'over');
+      $('bbar').hidden = !B || m.phase === 'wait' || m.phase === 'over';
+      if (B && !$('bbar').hidden) $('bbar').innerHTML = bar(m);
+      document.body.classList.toggle('out', !!B && !players[m.you].alive && m.phase !== 'wait' && m.phase !== 'over');
+      $('arena').classList.toggle('on', !!show);
+      if (!show) { key = ''; return; }
+      const html = m.phase === 'wait' ? wait(m) : over(m);
+      if (html === key) return;
+      const first = !key; key = html; box().innerHTML = html;
+      if (first && m.phase === 'over') Sfx.play(B.winner === m.you ? 'win' : 'game-show');
+      box().querySelectorAll('[data-a]').forEach(b => b.onclick = () => {
+        const a = b.dataset.a;
+        if (a === 'start') { send({ t: 'start' }); tone(660, .2); }
+        if (a === 'invite') $('invite').click();
+        if (a === 'leave') { try { sessionStorage.removeItem('rh-room'); } catch {} location.href = location.pathname; }
+      });
+    }
+    return { ui, rules };
+  })();
 
   // ---- Bonus overlay host ----
   const G = {};

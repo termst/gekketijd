@@ -43,22 +43,39 @@ const COLORS = ['#e8443a', '#3a8ee8', '#3ac46e', '#e8b23a', '#b45ae8', '#3ad6d6'
 const MAX_PLAYERS = 8;
 // Run settings, chosen by the lobby creator. Every value is checked against these lists.
 const RUN_OPTS = {
-  start: [0, 500, 1000, 2500, 5000, 10000],   // 0: everyone plays with their own wallet
+  mode: ['classic', 'battle'],                // battle: same stack for all, race to the target, the Storm drains everyone
+  start: [0, 500, 1000, 2500, 5000, 10000],   // 0: everyone plays with their own wallet (classic only)
   bet: [5, 8, 12, 15, 20, 30],                // betting time, seconds
   spin: ['short', 'normal', 'long'],          // wheel spin time
   limit: ['level', 'none'],                   // max bet per round
   late: ['on', 'off'],                        // late buy-ins for bonus games
   boost: ['on', 'off'],                       // Prime Minute
-  max: [2, 3, 4, 5, 6, 7, 8]                  // max players
+  max: [2, 3, 4, 5, 6, 7, 8],                 // max players
+  target: [2, 3, 5],                          // battle: win at this many times the starting stack
+  storm: ['slow', 'normal', 'fast']           // battle: how fast the ante grows
 };
-const RUN_DEFAULT = { start: 0, bet: 8, spin: 'normal', limit: 'level', late: 'on', boost: 'on', max: 8 };
+const RUN_DEFAULT = { mode: 'classic', start: 0, bet: 8, spin: 'normal', limit: 'level', late: 'on', boost: 'on', max: 8, target: 3, storm: 'normal' };
 const SPIN_MS = { short: [2000, 4000], normal: [3000, 7000], long: [6000, 10000] };
 const NO_LIMIT = 1e9;
 function runCfg(c) {
   const out = { ...RUN_DEFAULT };
   if (c && typeof c === 'object') for (const k of Object.keys(RUN_OPTS)) if (RUN_OPTS[k].includes(c[k])) out[k] = c[k];
+  if (out.mode === 'battle') { if (!out.start || out.start > 5000) out.start = 1000; out.limit = 'none'; }
   return out;
 }
+
+// ---------------------------------------------------------------- Battle mode
+// Everyone gets the same stack. First to target x stack wins, or be the last one standing.
+//   Storm: every round each player still in pays an ante into the Pot. The ante climbs one step every few rounds.
+//   Pot:   the biggest net winner of the round takes the whole Pot. Nobody up: the Pot carries over.
+//   Underdog: with 3 or more left, the lowest stack skips the ante.
+//   Knockout: under 5 Orra (one chip) after a round or an ante means you are out. You keep watching.
+//   Prize: saved to the wallet at the end. Winner 100 per opponent, everyone else 20 per player they outlasted.
+const STORM_EVERY = { slow: 6, normal: 4, fast: 3 };
+const STORM_PCT = [0.01, 0.02, 0.03, 0.05, 0.08, 0.12, 0.18, 0.25, 0.35, 0.5];
+const MIN_CHIP = 5, WIN_PRIZE = 100, OUTLAST_PRIZE = 20;
+const stormLevel = (cfg, n) => Math.min(STORM_PCT.length - 1, Math.floor(Math.max(0, n - 1) / STORM_EVERY[cfg.storm]));
+const anteFor = (cfg, n) => Math.max(MIN_CHIP, Math.round(cfg.start * STORM_PCT[stormLevel(cfg, n)] / 5) * 5);
 // Buy-in window: when the wheel lands on a bonus field, players who did not back it can buy in late.
 // Backers keep the edge: full multiplier, Prime Minute boost, an Edge Shield and the first turns.
 const JOIN_MS = 7000, INTRO_MS = 2800, LATE_PAY = 0.6;
@@ -87,11 +104,20 @@ class Room {
     this.cfg = runCfg(cfg); this.code = code; this.players = new Map(); this.phase = 'betting'; this.ends = 0; this.bets = {}; this.ready = new Set();
     this.boost = null; this.hist = []; this.dry = 0; this.spin = null; this.bonus = null; this.msg = ''; this.timer = null;
     this.last = {}; this.results = null; this.late = new Set(); this.passed = new Set(); this.spent = {}; this.round = 0; this.force = null; this.idle = null;
+    this.host = null;
+    this.battle = this.cfg.mode === 'battle' ? this.freshBattle() : null;
+    if (this.battle) this.phase = 'wait';
   }
+  freshBattle() { return { n: 0, pot: 0, ante: 0, storm: 0, ko: [], log: [], winner: null, standings: null, last: null }; }
+  // Players still in the battle. Offline players stay in: the Storm keeps draining them.
+  get alive() { return [...this.players.values()].filter(p => p.alive); }
+  inPlay(p) { return !this.battle || p.alive; }
   get online() { return [...this.players.values()].filter(p => p.conn && p.conn.open); }
   // A fixed starting balance gives every player a run balance for this lobby only; otherwise the wallet is used.
   bal(p) { return this.cfg.start ? p.run : p.prof.bal; }
   add(p, d) { if (this.cfg.start) p.run += d; else p.prof.bal += d; }
+  // Level up rewards: in a battle they go to the wallet, so XP never decides a fight.
+  reward(p, d) { if (this.battle) p.prof.bal += d; else this.add(p, d); }
   // Fixed balance runs only: moves a share of the round profit into the player's own wallet.
   save(p, profit, m) {
     const pr = p.prof, today = dayKey();
@@ -119,14 +145,18 @@ class Room {
       this.players.set(pid, p);
     }
     if (this.cfg.start && p.run == null) p.run = this.cfg.start;
+    if (!this.host) this.host = pid;
+    if (this.battle && p.alive == null) { p.alive = false; p.ko = 0; }   // joins as spectator until the next battle starts
     p.conn = conn; p.prof = profile(token, name); p.name = p.prof.name;
     conn.send({ t: 'catalog', games: Object.fromEntries(Object.entries(GAMES).map(([k, a]) => [k, a.map(g => ({ id: g.id, name: g.name, rules: g.rules }))])) });
     clearTimeout(this.idle); this.idle = null;
-    if (!this.timer && !this.bonus) this.startBetting();
+    if (!this.timer && !this.bonus && (!this.battle || this.phase !== 'wait' && this.phase !== 'over')) this.startBetting();
     this.broadcast();
     return p;
   }
   left() {
+    // The host role moves to the next online player, so a lobby is never stuck in the waiting room.
+    if (this.host && !this.online.some(p => p.id === this.host) && this.online.length) this.host = this.online[0].id;
     this.broadcast();
     if (this.phase === 'betting') this.checkReady();
     if (!this.online.length) this.idle = setTimeout(() => this.destroy(), 10 * 60000);
@@ -140,15 +170,17 @@ class Room {
   // ---- Core loop ----
   startBetting() {
     if (!this.online.length) { this.timer = null; this.phase = 'betting'; return; }   // paused until someone is back
+    if (this.battle && this.phase !== 'wait' && this.battleEnded()) return;
     this.phase = 'betting'; this.round++; this.bets = {}; this.ready.clear(); this.spin = null;
     const r = Math.random();
     this.boost = this.cfg.boost === 'on' ? { k: RHS.KEYS[Math.floor(Math.random() * 8)], m: r < 0.7 ? 2 : r < 0.95 ? 3 : 5 } : null;
     this.msg = this.boost ? `Prime Minute: ${TYPES[this.boost.k].n} is boosted x${this.boost.m}` : 'Place your bets';
+    if (this.battle && !this.stormAnte()) return;
     this.after(this.cfg.bet * 1000, () => this.closeBets());
     this.broadcast();
   }
   checkReady() {
-    const on = this.online;
+    const on = this.online.filter(p => this.inPlay(p));
     if (this.phase === 'betting' && on.length && on.every(p => this.ready.has(p.id))) this.closeBets();
   }
   closeBets() {
@@ -159,7 +191,7 @@ class Room {
       const b = this.bets[p.id]; if (!b) continue;
       const tot = Object.values(b).reduce((a, x) => a + x, 0);
       if (!tot || tot > this.bal(p) || tot > this.limit(p.prof)) continue;
-      this.add(p, -tot); p.levelUp = gainXp(p.prof, tot); this.add(p, p.levelUp); this.spent[p.id] = tot;
+      this.add(p, -tot); p.levelUp = gainXp(p.prof, tot); this.reward(p, p.levelUp); this.spent[p.id] = tot;
       this.stakes[p.id] = { ...b }; this.last[p.id] = { ...b };
     }
     saveSoon();
@@ -196,12 +228,13 @@ class Room {
     if (!ids.length) {
       this.tally(key, {}); saveSoon();
       this.msg = `${t.n}. Nobody bet on it.`; this.results = { key, rows: [] };
+      if (this.battle) this.settle({});
       this.after(2500, () => this.startBetting()); this.broadcast(); return;
     }
     let pool = GAMES[key], g = pool[Math.floor(Math.random() * pool.length)];
     if (this.force && this.force.game && GAME_BY_ID[this.force.game]) g = GAME_BY_ID[this.force.game];
     this.force = null;
-    const on = this.cfg.late === 'on' ? this.online.filter(p => !ids.includes(p.id)) : [];
+    const on = this.cfg.late === 'on' ? this.online.filter(p => !ids.includes(p.id) && this.inPlay(p)) : [];
     const top = Math.max(...ids.map(pid => this.stakes[pid][key])), share = lateShare(ids.length, ids.length + on.length);
     this.msg = `${t.n}: ${g.name}`;
     this.phase = 'intro'; this.nextGame = { id: g.id, name: g.name, cat: key, rules: g.rules, top, share, backers: ids };
@@ -223,13 +256,14 @@ class Room {
       const win = stake ? Math.round(stake * (m + 1)) : 0;
       this.add(p, win); wins[pid] = win;
       const spent = Object.values(b).reduce((a, x) => a + x, 0);
-      const vault = this.cfg.start ? this.save(p, win - spent, m) : 0;
+      const vault = this.cfg.start && !this.battle ? this.save(p, win - spent, m) : 0;
       rows.push({ id: pid, late, m, stake, win, spent, vault, lvl: p.levelUp || 0 });
       p.levelUp = 0;
     }
     this.tally(key, wins);
     rows.sort((a, b) => b.win - a.win);
     this.results = { key, rows };
+    if (this.battle) this.results.battle = this.settle(Object.fromEntries(rows.map(r => [r.id, r.win - r.spent])));
     this.phase = 'payout'; saveSoon();
     this.after(BONUS_KEYS.includes(key) ? 5000 : 3500, () => this.startBetting());
     this.broadcast();
@@ -238,7 +272,7 @@ class Room {
   // Most a non-backer may buy in for: a share of the top stake, within balance and the level limit left this round.
   lateCap(p) {
     const n = this.nextGame;
-    if (this.phase !== 'intro' || !n || this.cfg.late !== 'on' || n.backers.includes(p.id) || this.late.has(p.id) || this.passed.has(p.id)) return 0;
+    if (this.phase !== 'intro' || !n || this.cfg.late !== 'on' || !this.inPlay(p) || n.backers.includes(p.id) || this.late.has(p.id) || this.passed.has(p.id)) return 0;
     const c = Math.min(Math.max(5, Math.floor(n.top * n.share / 5) * 5), this.bal(p), this.limit(p.prof) - (this.spent[p.id] || 0));   // never below one 5 chip
     return Math.max(0, c >= 5 ? Math.floor(c / 5) * 5 : 0);
   }
@@ -325,11 +359,93 @@ class Room {
     }
   }
 
+  // ---- Battle ----
+  startBattle(p) {
+    if (!this.battle || p.id !== this.host || (this.phase !== 'wait' && this.phase !== 'over')) return;
+    const on = this.online;
+    if (on.length < 2) return p.conn && p.conn.send({ t: 'err', msg: 'A battle needs at least 2 players.' });
+    clearTimeout(this.timer); this.timer = null;
+    this.battle = this.freshBattle(); this.hist = []; this.dry = 0; this.last = {}; this.results = null;
+    for (const q of this.players.values()) {
+      const inn = on.includes(q);
+      q.alive = inn; q.fought = inn; q.ko = 0; q.place = null; q.prize = 0; q.levelUp = 0;
+      if (inn) q.run = this.cfg.start;
+    }
+    this.phase = 'wait';
+    this.startBetting();
+  }
+  // Runs at the start of every battle round: raise the Storm, collect the ante, knock out anyone left without a chip.
+  stormAnte() {
+    const b = this.battle, cfg = this.cfg;
+    b.n++; b.storm = stormLevel(cfg, b.n); b.ante = anteFor(cfg, b.n);
+    const alive = this.alive.sort((x, y) => x.run - y.run);
+    b.underdog = alive.length >= 3 ? alive[0].id : null;
+    for (const p of alive) {
+      if (p.id === b.underdog) continue;
+      const pay = Math.min(b.ante, p.run); p.run -= pay; b.pot += pay;
+    }
+    const out = this.knockouts(null);
+    if (out.length) b.log.unshift(`Storm takes out ${out.join(', ')}`);
+    if (this.battleEnded()) return false;
+    this.msg = `Round ${b.n}. Ante ${b.ante}, Pot ${b.pot}.` + (this.boost ? ` ${TYPES[this.boost.k].n} is boosted x${this.boost.m}.` : '');
+    return true;
+  }
+  // Moves the leftover crumbs of busted players into the Pot and gives them a place. Lowest stack gets the worst place.
+  knockouts(by) {
+    const b = this.battle, gone = this.alive.filter(p => p.run < MIN_CHIP).sort((x, y) => x.run - y.run);
+    let left = this.alive.length;
+    for (const p of gone) {
+      b.pot += p.run; p.run = 0; p.alive = false; p.place = left--;
+      b.ko.unshift({ id: p.id, by: by ? by.id : null, n: b.n });
+      if (by) by.ko++;
+    }
+    return gone.map(p => p.name);
+  }
+  // After each round. net: { pid: round result minus everything staked }. Returns what happened, for the payout screen.
+  settle(net) {
+    const b = this.battle, out = { pot: 0, taker: null, ko: [], ante: b.ante, n: b.n };
+    let top = null;
+    for (const p of this.alive) { const v = net[p.id] || 0; if (v > 0 && (!top || v > net[top.id])) top = p; }
+    if (top && b.pot) { out.pot = b.pot; out.taker = top.id; top.run += b.pot; b.log.unshift(`${top.name} takes the Pot: ${b.pot}`); b.pot = 0; }
+    out.ko = this.knockouts(top);
+    if (out.ko.length) b.log.unshift(`${out.ko.join(', ')} ${out.ko.length > 1 ? 'are' : 'is'} out`);
+    const goal = this.cfg.start * this.cfg.target, hit = this.alive.filter(p => p.run >= goal).sort((x, y) => y.run - x.run);
+    if (hit.length) b.winner = hit[0].id;
+    b.log.length = Math.min(b.log.length, 8);
+    b.last = out;
+    return out;
+  }
+  // True (and the battle is closed) once someone hit the target or one player or fewer is left.
+  battleEnded() {
+    const b = this.battle; if (!b || this.phase === 'over') return !!b;
+    const alive = this.alive;
+    if (!b.winner && alive.length > 1) return false;
+    const fought = [...this.players.values()].filter(p => p.fought);
+    let w = b.winner ? this.players.get(b.winner) : alive[0];
+    if (!w) w = fought.slice().sort((x, y) => (x.place || 99) - (y.place || 99))[0];   // everyone busted at once: best place wins
+    b.winner = w ? w.id : null;
+    // Survivors who did not win rank by stack.
+    const rest = alive.filter(p => p !== w).sort((x, y) => y.run - x.run);
+    if (w) { w.place = 1; if (b.pot) { w.run += b.pot; b.log.unshift(`${w.name} takes the last Pot: ${b.pot}`); b.pot = 0; } }
+    rest.forEach((p, i) => p.place = i + 2);
+    const N = fought.length;
+    for (const p of fought) {
+      p.prize = p === w ? WIN_PRIZE * (N - 1) : OUTLAST_PRIZE * Math.max(0, N - (p.place || N));
+      if (p.prize) { p.prof.bal += p.prize; p.prof.saved += p.prize; }
+      p.alive = false;
+    }
+    b.standings = fought.slice().sort((x, y) => (x.place || 99) - (y.place || 99)).map(p => ({ id: p.id, place: p.place, run: p.run, ko: p.ko, prize: p.prize }));
+    clearTimeout(this.timer); this.timer = null; this.ends = 0; this.spin = null; this.boost = null;
+    this.phase = 'over'; this.msg = w ? `${w.name} wins the battle` : 'Battle over';
+    saveSoon(); this.broadcast();
+    return true;
+  }
+
   // ---- Client messages ----
   handle(p, m) {
     const pr = p.prof;
     if (m.t === 'bet' || m.t === 'bets' || m.t === 'unbet' || m.t === 'clear' || m.t === 'repeat') {
-      if (this.phase !== 'betting' || this.ready.has(p.id)) return;
+      if (this.phase !== 'betting' || this.ready.has(p.id) || !this.inPlay(p)) return;
       const b = this.bets[p.id] = this.bets[p.id] || {};
       const tot = () => Object.values(b).reduce((a, x) => a + x, 0);
       if (m.t === 'bet' || m.t === 'bets') {
@@ -349,8 +465,9 @@ class Room {
       }
       return this.broadcast();
     }
+    if (m.t === 'start' || m.t === 'rematch') return this.startBattle(p);
     if (m.t === 'ready') {
-      if (this.phase !== 'betting') return;
+      if (this.phase !== 'betting' || !this.inPlay(p)) return;
       this.ready.add(p.id); this.broadcast(); return this.checkReady();
     }
     if (m.t === 'buyin') {
@@ -360,7 +477,7 @@ class Room {
       if (!(amt >= 5)) return;
       if (amt > cap) return p.conn.send({ t: 'err', msg: `You can buy in for at most ${cap} Orra.` });
       const key = this.nextGame.cat;
-      this.add(p, -amt); const up = gainXp(pr, amt); this.add(p, up); p.levelUp = (p.levelUp || 0) + up;
+      this.add(p, -amt); const up = gainXp(pr, amt); this.reward(p, up); p.levelUp = (p.levelUp || 0) + up;
       this.spent[p.id] = (this.spent[p.id] || 0) + amt;
       this.stakes[p.id] = { ...(this.stakes[p.id] || {}), [key]: amt };
       this.late.add(p.id); saveSoon();
@@ -385,13 +502,14 @@ class Room {
     const me = this.players.get(pid), pr = me.prof;
     const today = pr.day === dayKey(), next = pr.day === dayKey(Date.now() - 864e5) ? pr.streak + 1 : 1;
     return {
-      t: 'room', code: this.code, cfg: this.cfg, you: pid, dev: DEV, prof: pr, phase: this.phase, ends: this.ends, now: Date.now(), round: this.round,
+      t: 'room', code: this.code, cfg: this.cfg, you: pid, dev: DEV, host: this.host,
+      battle: this.battle ? { ...this.battle, target: this.cfg.start * this.cfg.target, every: STORM_EVERY[this.cfg.storm], nextAnte: anteFor(this.cfg, (this.battle.storm + 1) * STORM_EVERY[this.cfg.storm] + 1), alive: this.alive.length, maxStorm: STORM_PCT.length } : null, prof: pr, phase: this.phase, ends: this.ends, now: Date.now(), round: this.round,
       boost: this.boost, hist: this.hist, msg: this.msg, spin: this.spin, landed: this.phase === 'betting' ? null : this.landedKey,
       next: this.phase === 'intro' ? { ...this.nextGame, cap: this.lateCap(me), passed: this.passed.has(pid), late: [...this.late], latePay: LATE_PAY } : null, results: this.phase === 'payout' || this.phase === 'landed' ? this.results : null,
       players: [...this.players.values()].map(p => ({
         id: p.id, name: p.name, color: p.color, online: !!(p.conn && p.conn.open), bal: this.bal(p), lvl: p.prof.lvl,
         bets: this.phase === 'betting' ? (this.bets[p.id] || {}) : ((this.stakes || {})[p.id] || {}),
-        ready: this.ready.has(p.id), shield: p.prof.items.shield, swap: p.prof.items.swap
+        ready: this.ready.has(p.id), shield: p.prof.items.shield, swap: p.prof.items.swap, alive: !!p.alive, ko: p.ko || 0, place: p.place || null
       })),
       me: {
         bal: this.bal(me), lvl: pr.lvl, xp: Math.floor(pr.xp), need: need(pr), limit: this.limit(pr), won: pr.won, lost: pr.lost, wallet: pr.bal, saved: pr.saved,
@@ -404,5 +522,5 @@ class Room {
 }
 
 
-return { rooms, Room, genCode, profile, GAMES, CODE_OK, MAX_PLAYERS, RUN_OPTS, RUN_DEFAULT, runCfg, vaultCut, vaultCap };
+return { rooms, Room, genCode, profile, GAMES, CODE_OK, MAX_PLAYERS, RUN_OPTS, RUN_DEFAULT, runCfg, vaultCut, vaultCap, anteFor, stormLevel, STORM_EVERY };
 });

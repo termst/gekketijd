@@ -7,7 +7,7 @@ Multiplayer wheel game with 16 minigames. Play money only (Orra), no real money.
 **https://termst.github.io/gekketijd/**
 
 1. Enter a name. Type a 4 character code or leave the code field empty for a random one, then click **Create**.
-2. Pick the run settings (starting balance, betting time, wheel spin time, bet limit, late buy-ins, Prime Minute, max players) and click **Open lobby**. Your browser is now the host of the lobby.
+2. Pick a mode (Classic or Battle) and the settings, then click **Open lobby**. Your browser is now the host of the lobby.
 3. Click **Copy invite link** and send it to friends (or give them the 4 character code).
 4. Friends open the link and click **Join**. Up to 8 players.
 
@@ -19,6 +19,21 @@ Good to know:
 - A run with a fixed starting balance gives every player the same fresh balance for that lobby only. Your saved wallet is untouched and the Cashier is closed during that run.
 - The chip stack badge between each group of 4 tickets bets the selected chip on all 4 fields. Other players' bets show on each ticket as their colour token, the first 2 letters of their name and the amount.
 - Some strict networks (school, office, some mobile carriers) block peer to peer connections. Then try another network or a phone hotspot.
+
+## Battle mode
+
+Pick **Battle** on the New lobby screen. Everyone gets the same stack, the race is on.
+
+| Rule | How it works |
+|---|---|
+| Goal | First to the target (x2, x3 or x5 of the stack) wins, or be the last one standing. |
+| Storm | Every round each player still in pays an ante into the Pot. It starts at 1% of the stack and climbs one step every 6, 4 or 3 rounds (Slow, Normal, Fast): 1, 2, 3, 5, 8, 12, 18, 25, 35, 50%. |
+| Pot | The biggest net winner of the round takes the whole Pot. Nobody up: it carries over. The winner also takes what is left at the end. |
+| Underdog | With 3 or more players left, the lowest stack skips the ante. |
+| Knockout | Under 5 Orra after a round or an ante means out. The Pot taker of that round gets the KO. Out players keep watching. |
+| Prize | Saved to the wallet: winner 100 per opponent, the rest 20 per player they outlasted. Level up rewards go to the wallet, bets have no level limit. |
+
+The lobby opens in a waiting room. The host (lobby creator, or the next online player if they leave) starts the battle once 2+ players are in, and can start a rematch from the end screen. Players who join mid battle watch until the next one. Tuning: `STORM_EVERY`, `STORM_PCT`, `WIN_PRIZE`, `OUTLAST_PRIZE` in `public/core.js`.
 
 ## Bonus games: backers and late buy-ins
 
