@@ -63,7 +63,7 @@ const RH = (() => {
   // ---- Lobby screen ----
   // Run settings shown when creating a lobby. Values mirror RUN_OPTS in core.js, which checks them again.
   const RUN = [
-    ['start', 'Starting balance', 'Own wallet uses your saved Orra. A fixed amount gives everyone the same fresh start.', [[0, 'Own wallet'], [500, '500'], [1000, '1K'], [2500, '2.5K'], [5000, '5K'], [10000, '10K']]],
+    ['start', 'Starting balance', 'Own wallet plays with your saved Orra. A fixed amount gives everyone the same fresh start, and part of every win is saved to your wallet.', [[0, 'Own wallet'], [500, '500'], [1000, '1K'], [2500, '2.5K'], [5000, '5K'], [10000, '10K']]],
     ['bet', 'Betting time', 'Seconds to place bets each round.', [5, 8, 12, 15, 20, 30].map(v => [v, v + 's'])],
     ['spin', 'Wheel spin time', 'How long the wheel turns before it lands.', [['short', 'Short 2-4s'], ['normal', 'Normal 3-7s'], ['long', 'Long 6-10s']]],
     ['limit', 'Max bet per round', 'Level limit grows as you level up.', [['level', 'Level limit'], ['none', 'No limit']], 1],
@@ -419,6 +419,7 @@ const RH = (() => {
     const c = S.me.cashier, me = S.me, pct = (a, b) => Math.max(0, Math.min(100, a / b * 100)).toFixed(1) + '%', nolim = me.limit >= 1e9;
     if (c.closed) {
       $('workbody').innerHTML = `<div class="cards"><section class="dcard"><h3>Run balance</h3><p class="stat">${ORRA}${fmt(me.bal - myTot)}</p><p class="note">This run started everyone on ${fmt(S.cfg.start)} Orra. Wages and the daily bonus are paused until you play in a lobby with your own wallet.</p></section>
+ <section class="dcard"><h3>Own wallet</h3><p class="stat">${ORRA}${fmt(me.wallet)}<small>saved ${fmt(me.vault.run)} of ${fmt(me.vault.cap)} this run</small></p><div class="meter"><i style="width:${pct(me.vault.run, me.vault.cap)}"></i></div><p class="note">Part of every winning round is saved here. Bigger multipliers save a bigger share, very large wins count less, and the share shrinks as the run cap fills. Today: ${fmt(me.vault.today)} of ${fmt(me.vault.day)}. It does not change your run balance; use it by picking Own wallet when you create a lobby.</p></section>
  <section class="dcard"><h3>Level ${me.lvl}</h3><p class="stat">${nolim ? 'No limit' : fmt(me.limit)}<small>max bet per round</small></p><div class="meter"><i style="width:${pct(me.xp, me.need)}"></i></div><p class="note">${fmt(me.need - me.xp)} XP to level ${me.lvl + 1}.</p></section></div>`;
       return;
     }
@@ -510,6 +511,7 @@ const RH = (() => {
       if (row && row.stake) msg = `${t.n} pays ${fx2(row.m)}x. You collect ${fmt(row.win)} Orra.`;
       else if (row) msg = `${t.n}. No bet on this field.`;
       if (row && row.lvl) msg += ` Level up! +${row.lvl} Orra.`;
+      if (row && row.vault) msg += ` +${fmt(row.vault)} saved to your wallet.`;
       $('win').textContent = fmt(row ? row.win : 0); $('win').parentNode.classList.toggle('up', !!(row && row.win > 0));
       const key2 = m.round + ':' + key;
       if (row && row.win > 0 && lastWinShown !== key2) { lastWinShown = key2; fanfare(); document.body.classList.add('won'); }
@@ -609,7 +611,7 @@ const RH = (() => {
       const rows = m.results.rows.filter(r => r.stake), mine = rows.find(r => r.id === m.you);
       const pl = id => players[id] || { name: '?', color: '#888' };
       box().insertAdjacentHTML('beforeend', `<div class="final"><div class="fcard"><span class="cat">${CAT_NAMES[m.results.key]}</span><h3>${esc(last ? last.name : 'Bonus')} results</h3>
-        ${mine ? `<p class="mine ${mine.win > 0 ? 'win' : ''}">You finished at ${fx2(mine.m)}x and collect ${orra(mine.win)}</p>` : '<p class="note">You watched this one.</p>'}
+        ${mine ? `<p class="mine ${mine.win > 0 ? 'win' : ''}">You finished at ${fx2(mine.m)}x and collect ${orra(mine.win)}${mine.vault ? `. ${orra(mine.vault)} saved to your wallet` : ''}</p>` : '<p class="note">You watched this one.</p>'}
         <table class="res"><tr><th>Player</th><th class="n">Result</th><th class="n">Stake</th><th class="n">Collect</th></tr>${rows.map(r => `<tr class="${r.id === m.you ? 'me' : ''}"><td><span class="pdot" style="--c:${pl(r.id).color}"></span>${esc(pl(r.id).name)}${r.late ? ' <span class="tag">Late</span>' : ''}</td><td class="n">${fx2(r.m)}x</td><td class="n">${fmt(r.stake)}</td><td class="n">${orra(r.win)}</td></tr>`).join('')}</table>
         <button class="btn go" id="bclose">Back to the table</button></div></div>`);
       const b = $('bclose'); if (b) { b.onclick = close; b.focus(); }

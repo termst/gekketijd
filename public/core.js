@@ -22,6 +22,7 @@ function profile(token, name) {
   if (name) p.name = name;
   p.items = p.items || { swap: 0, shield: 0 };
   p.won = p.won || 0; p.lost = p.lost || 0;   // lifetime: profit from winning bets, stakes lost
+  p.saved = p.saved || 0;                      // lifetime: Orra saved to the wallet from fixed balance runs
   saveSoon();
   return p;
 }
@@ -65,6 +66,21 @@ const JOIN_MS = 7000, INTRO_MS = 2800, LATE_PAY = 0.6;
 const lateShare = (backers, online) => Math.min(0.5, 0.25 + 0.25 * backers / Math.max(1, online));
 const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 const round2 = x => Math.round(x * 100) / 100;
+// Wallet savings: in a fixed balance run part of every winning round is saved to the player's own wallet.
+// It never touches the run balance, so gameplay is unchanged. The cut:
+//   profit  = round win minus everything staked that round (betting all fields earns nothing)
+//   eff     = k * ln(1 + profit / k), k = start / 4: big wins count less and less (diminishing returns)
+//   rate    = 5% + 2.5% * log2(1 + multiplier), at most 20%: higher multipliers save a bigger share
+//   cut     = eff * rate * (room left / run cap), so the share shrinks as the run cap fills up
+// Caps: per run 100 + 8% of the start (max 1000), per day 1500 across all runs.
+const VAULT_DAY = 1500;
+const vaultCap = start => Math.min(1000, Math.round(100 + start * 0.08));
+function vaultCut(start, profit, m, runGot, dayLeft) {
+  const cap = vaultCap(start), left = Math.min(cap - runGot, dayLeft);
+  if (profit <= 0 || left <= 0) return 0;
+  const k = start / 4, eff = k * Math.log1p(profit / k), rate = Math.min(0.2, 0.05 + 0.025 * Math.log2(1 + m));
+  return Math.max(0, Math.min(left, Math.floor(eff * rate * (cap - runGot) / cap)));
+}
 
 class Room {
   constructor(code, cfg) {
@@ -76,6 +92,14 @@ class Room {
   // A fixed starting balance gives every player a run balance for this lobby only; otherwise the wallet is used.
   bal(p) { return this.cfg.start ? p.run : p.prof.bal; }
   add(p, d) { if (this.cfg.start) p.run += d; else p.prof.bal += d; }
+  // Fixed balance runs only: moves a share of the round profit into the player's own wallet.
+  save(p, profit, m) {
+    const pr = p.prof, today = dayKey();
+    if (pr.vday !== today) { pr.vday = today; pr.vtoday = 0; }
+    const cut = vaultCut(this.cfg.start, profit, m, p.vault || 0, VAULT_DAY - pr.vtoday);
+    if (cut > 0) { pr.bal += cut; pr.saved += cut; pr.vtoday += cut; p.vault = (p.vault || 0) + cut; }
+    return cut;
+  }
   limit(pr) { return this.cfg.limit === 'none' ? NO_LIMIT : limit(pr); }
   // Lifetime stats: won is the profit on the field that hit, lost is every stake on other fields.
   tally(key, wins) {
@@ -196,7 +220,9 @@ class Room {
       else if (stake && this.boost && this.boost.k === key) m = round2(m * this.boost.m);
       const win = stake ? Math.round(stake * (m + 1)) : 0;
       this.add(p, win); wins[pid] = win;
-      rows.push({ id: pid, late, m, stake, win, spent: Object.values(b).reduce((a, x) => a + x, 0), lvl: p.levelUp || 0 });
+      const spent = Object.values(b).reduce((a, x) => a + x, 0);
+      const vault = this.cfg.start ? this.save(p, win - spent, m) : 0;
+      rows.push({ id: pid, late, m, stake, win, spent, vault, lvl: p.levelUp || 0 });
       p.levelUp = 0;
     }
     this.tally(key, wins);
@@ -366,7 +392,8 @@ class Room {
         ready: this.ready.has(p.id), shield: p.prof.items.shield, swap: p.prof.items.swap
       })),
       me: {
-        bal: this.bal(me), lvl: pr.lvl, xp: Math.floor(pr.xp), need: need(pr), limit: this.limit(pr), won: pr.won, lost: pr.lost, items: pr.items, hasLast: !!Object.keys(this.last[pid] || {}).length,
+        bal: this.bal(me), lvl: pr.lvl, xp: Math.floor(pr.xp), need: need(pr), limit: this.limit(pr), won: pr.won, lost: pr.lost, wallet: pr.bal, saved: pr.saved,
+        vault: { run: me.vault || 0, cap: this.cfg.start ? vaultCap(this.cfg.start) : 0, today: pr.vday === dayKey() ? pr.vtoday : 0, day: VAULT_DAY }, items: pr.items, hasLast: !!Object.keys(this.last[pid] || {}).length,
         cashier: { closed: !!this.cfg.start, rate: rate(pr), cap: cap(pr), pending: pending(pr), work: pr.work, upCost: upCost(pr), today, day: today ? pr.streak : next, gift: 100 + 25 * Math.min(next - 1, 6) }
       }
     };
@@ -375,5 +402,5 @@ class Room {
 }
 
 
-return { rooms, Room, genCode, profile, GAMES, CODE_OK, MAX_PLAYERS, RUN_OPTS, RUN_DEFAULT, runCfg };
+return { rooms, Room, genCode, profile, GAMES, CODE_OK, MAX_PLAYERS, RUN_OPTS, RUN_DEFAULT, runCfg, vaultCut, vaultCap };
 });
