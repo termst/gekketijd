@@ -3,10 +3,10 @@
 module.exports = {
   id: 'minority', cat: 'spare', name: 'Minority Rules',
   rules: [
-    'Secretly pick Red or Blue. The fewer players on a side, the higher its multiplier (1 player gets 8x, a crowd shares 2x).',
-    'After the reveal and before the flip, a Swap token forces one rival to the other side. Everyone gets 1 free token, plus any you won earlier.',
-    'If everyone picks the same side, a Rescue Flip doubles that side.',
-    'Winning side pays its multiplier. The losing side keeps 1x.'
+    'Pick: Red or Blue, in secret.',
+    'Pay: fewer players on a side, bigger multiplier. Alone 8x, 2 players 4x, 3 players 3x, 4+ players 2x.',
+    'Swap: after the reveal, spend a Swap token to move a rival to the other side. Everyone gets 1 free.',
+    'Flip: winners get their side\'s multiplier, losers 1x. If everyone picks the same side, it is doubled.'
   ],
   create(ctx) {
     const ids = ctx.ids, picks = {}, free = {}, done = {}, swaps = [];

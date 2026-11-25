@@ -49,10 +49,10 @@ defs["spare-change/1-minority-rules.js"] = function (module, exports, require) {
 module.exports = {
   id: 'minority', cat: 'spare', name: 'Minority Rules',
   rules: [
-    'Secretly pick Red or Blue. The fewer players on a side, the higher its multiplier (1 player gets 8x, a crowd shares 2x).',
-    'After the reveal and before the flip, a Swap token forces one rival to the other side. Everyone gets 1 free token, plus any you won earlier.',
-    'If everyone picks the same side, a Rescue Flip doubles that side.',
-    'Winning side pays its multiplier. The losing side keeps 1x.'
+    'Pick: Red or Blue, in secret.',
+    'Pay: fewer players on a side, bigger multiplier. Alone 8x, 2 players 4x, 3 players 3x, 4+ players 2x.',
+    'Swap: after the reveal, spend a Swap token to move a rival to the other side. Everyone gets 1 free.',
+    'Flip: winners get their side\'s multiplier, losers 1x. If everyone picks the same side, it is doubled.'
   ],
   create(ctx) {
     const ids = ctx.ids, picks = {}, free = {}, done = {}, swaps = [];
@@ -132,10 +132,10 @@ const MAX_CALLS = 8, TURN_MS = 9000;
 module.exports = {
   id: 'streak', cat: 'spare', name: 'Streak or Bank',
   rules: [
-    'Players take turns calling a coin flip. Each correct call adds +1x to your streak. A wrong call wipes the streak.',
-    'Bank at any time to lock your streak in and leave. You have 8 calls; whatever is left on the last call is banked for you.',
-    'When you bank you can pass the coin: that rival must make 1 extra call before they are allowed to bank.',
-    'Reaching a 5 streak grants a Shield that blocks the next attack on you.'
+    'Call: on your turn, call Red or Blue. Right: streak +1x. Wrong: streak back to 0.',
+    'Bank: lock in your streak and stop. After 8 calls it banks itself.',
+    'Pass: when you bank, you can force a rival to make 1 extra call before they may bank.',
+    'Shield: every 5 streak earns one.'
   ],
   create(ctx) {
     const order = ctx.shuffle(ctx.ids.slice()), S = {};
@@ -201,10 +201,10 @@ const pos = (ms) => { const x = ((ms % PERIOD) + PERIOD) % PERIOD / PERIOD; retu
 module.exports = {
   id: 'duel', cat: 'spare', name: 'Coin Duel',
   rules: [
-    'Players face off in pairs. A coin spins and a marker sweeps the timing bar. Stop it as close to your color\'s sweet spot as you can.',
-    'Your stop sets your multiplier, from 2x (far away) to 20x (dead on).',
-    'The winner of each duel steals 25% of the loser\'s multiplier.',
-    'A perfect stop wins a free Swap token. An odd player out duels the House.'
+    'Duel: you face 1 player. A marker sweeps the bar. Press STOP on your color\'s mark.',
+    'Pay: closer stop, higher multiplier. 2x far off, 20x dead on.',
+    'Steal: the better stop takes 25% of the loser\'s multiplier.',
+    'Extra: a perfect stop earns a Swap token. The odd player out duels the House.'
   ],
   PERIOD, WINDOW, SPOT,
   create(ctx) {
@@ -274,10 +274,9 @@ const POINTS = 10, BID_MS = 12000;
 module.exports = {
   id: 'weighted', cat: 'spare', name: 'Weighted Coin',
   rules: [
-    'Both sides show a multiplier. Secretly back Red or Blue and bid up to 10 points on it. Each point adds +5% chance to that side.',
-    'The coin flips with the final weighted odds (5% to 95%).',
-    'Bid points are spent even if your side loses. Every unspent point is worth 0.5x at the end, so baiting rivals into overspending pays.',
-    'Whoever bid the most on the winning side also gets the Top Slot multiplier.'
+    'Bid: pick Red or Blue and bid 0 to 10 points. Each point adds +5% chance to that side (5% to 95%).',
+    'Pay: the winning side pays its multiplier. Its top bidder also gets the Top Slot multiplier.',
+    'Keep: every unspent point pays 0.5x, win or lose.'
   ],
   create(ctx) {
     const ids = ctx.ids, bids = {}, lock = {};
@@ -336,10 +335,10 @@ const N = 108, COLS = 12, PREVIEW = 3000, WAVE = 1100, SHOOT_MS = 15000, BOMB_MS
 module.exports = {
   id: 'sniper', cat: 'grab', name: 'Memory Sniper',
   rules: [
-    '108 multipliers are shown for 3 seconds, then hidden and shuffled in front of you. Track the big ones.',
-    'Shoot a target to claim it. The first shot claims it and locks it for everyone else.',
-    '5 hidden bomb targets are in the gallery. Hit one and you pick a rival whose multiplier gets halved.',
-    'The single golden target is marked in the preview. Hitting it grants a free extra shot.'
+    'Watch: 108 targets show their value for 3 seconds, then hide and shuffle. Follow the big ones.',
+    'Shoot: 1 shot. The first hit claims a target.',
+    'Gold: the golden target (marked in the preview) gives 1 extra shot.',
+    'Bomb: 5 targets are bombs in disguise. Hit one and you halve a rival\'s result.'
   ],
   create(ctx) {
     const vals = ctx.shuffle(pool([[5, 26], [7, 18], [10, 18], [15, 12], [20, 10], [25, 7], [50, 6], [75, 3], [100, 2]])).slice(0, N - 6);
@@ -439,10 +438,10 @@ const N = 36, TRAP_MS = 15000, PICK_MS = 12000;
 module.exports = {
   id: 'traps', cat: 'grab', name: 'Trap Setter',
   rules: [
-    'Every target shows its multiplier. First, secretly place 2 traps on targets.',
-    'Then everyone picks one target. Players on the same target split its value.',
-    'Picking a trapped target costs you 3x per trap, and that 3x goes to the player who set it. Your own traps do nothing to you.',
-    'Picking a target that nobody trapped and nobody else chose grants +2x.'
+    'Trap: place 2 secret traps on the 36 targets.',
+    'Pick: choose 1 target. Players on the same target split its value.',
+    'Hit: each rival trap on your pick costs you 3x and pays it to the trapper. Your own traps do nothing.',
+    'Bonus: alone on a target nobody trapped is +2x.'
   ],
   create(ctx) {
     const ids = ctx.ids, vals = ctx.shuffle(pool([[2, 6], [3, 6], [5, 6], [8, 5], [10, 4], [15, 3], [20, 3], [30, 2], [50, 1]]));
@@ -502,10 +501,10 @@ const ROWS = 8, COLS = 10, BULLETS = 3, GAME_MS = 30000, COOLDOWN = 1000;
 module.exports = {
   id: 'ammo', cat: 'grab', name: 'Limited Ammo Bounty',
   rules: [
-    'Everyone gets 3 bullets. The gallery is hidden. A shot claims the target it hits and reveals the entire row for everyone.',
-    'Shooting a target another player already claimed steals it from them.',
-    'Wait for information, or grab the high values before someone else does. You hold the sum of the targets you own at the end.',
-    'Every bullet you keep unused until the end converts into a Shield.'
+    'Shoot: 3 bullets, 30 seconds. Targets are hidden. A shot reveals its whole row.',
+    'Own: hit a free target to claim it. Hit a rival\'s target to steal it.',
+    'Score: the sum of the targets you own at the end.',
+    'Hold: unused bullets become Shields.'
   ],
   create(ctx) {
     const ids = ctx.ids, cells = ctx.shuffle(pool([[2, 16], [3, 14], [5, 14], [8, 10], [10, 8], [15, 6], [25, 6], [50, 4], [100, 2]])).map(v => ({ v, o: null }));
@@ -557,10 +556,10 @@ const AIM_MS = 15000, SHOT_MS = 2600, COLORS = ['red', 'blue', 'green', 'gold'],
 module.exports = {
   id: 'ricochet', cat: 'grab', name: 'Ricochet',
   rules: [
-    'You get 1 shot. Aim the angle; the bullet bounces off the walls and passes through up to 3 targets.',
-    'You receive the best target it hits. Every target it passes through is destroyed for everyone.',
-    'Everyone sees each other\'s aim live. Shots fire in the order players lock in, so aim your path through the zones rivals are targeting.',
-    'Hitting 3 targets of the same color grants a combo: your best value x3.'
+    'Aim: 1 shot. It bounces off the walls and passes through up to 3 targets.',
+    'Score: the best value you hit. Every target hit is destroyed.',
+    'Order: shots fire in lock-in order, so earlier shots clear targets first. All aims are visible live.',
+    'Combo: 3 hits of the same color triple your best value.'
   ],
   create(ctx) {
     const ids = ctx.ids, T = [], vals = ctx.shuffle(pool([[2, 8], [3, 8], [5, 7], [8, 5], [10, 4], [15, 3], [25, 2], [40, 2], [60, 1]]));
@@ -626,10 +625,10 @@ const SLOTS = 12, DROP_MS = 8000, EXTRA_MS = 5000, MAX_PUCKS = 4;
 module.exports = {
   id: 'puckwars', cat: 'drop', name: 'Puck Wars',
   rules: [
-    'Everyone drops their own puck on the same board. Choose your position and your moment. Pucks collide and knock each other off course.',
-    'Drop next to the leader (crown) to knock their puck away.',
-    'You keep the value of the slot your puck lands in.',
-    'Landing on DOUBLE doubles only your multiplier and grants you a second puck.'
+    'Drop: move to pick a spot, click to drop (auto after 8 seconds). All pucks share 1 board and collide.',
+    'Score: the slot your puck lands in.',
+    'Leader: the richest player is marked. Knock their puck off course.',
+    'DOUBLE: doubles your result and gives you 1 more puck.'
   ],
   create(ctx) {
     const ids = ctx.ids, vals = slotValues(ctx, SLOTS, 2);
@@ -693,10 +692,10 @@ const BUILD_MS = 15000, MAX_DOUBLES = 3;
 module.exports = {
   id: 'pegs', cat: 'drop', name: 'Peg Builder',
   rules: [
-    'Each player owns 2 slots at the bottom. Before the drop, place 2 extra pegs anywhere on the board.',
-    'Use your pegs to steer the puck to your slots, or to block the paths that lead to rivals\' slots. Pegs show up live.',
-    'One shared puck drops. The owner of the slot it lands in collects its value.',
-    'The neutral DOUBLE slot doubles every slot and drops the puck again.'
+    'Slots: you own 2 bottom slots, marked in your color.',
+    'Build: place 2 pegs to steer the puck to your slots or away from rivals\'.',
+    'Drop: 1 shared puck. The owner of the slot it lands in collects its value.',
+    'DOUBLE: neutral slot. Doubles every slot and drops again.'
   ],
   create(ctx) {
     const ids = ctx.ids, n = Math.max(13, ids.length * 2 + 1);
@@ -766,10 +765,10 @@ const START = 20, LOT_MS = 5000, EXTEND = 3000, STEAL_MS = 10000, PUCKS = 3;
 module.exports = {
   id: 'auction', cat: 'drop', name: 'Slot Auction',
   rules: [
-    'Everyone starts with 20x. The bottom slots are auctioned one by one; you pay with part of your current multiplier. A raise keeps the lot open 3 more seconds.',
-    'Bid up slots you do not want to force rivals to overpay.',
-    'Then 3 pucks drop. The owner of each hit slot collects its value. Your final result is what you kept plus what you collected.',
-    'Whoever owns the DOUBLE slot steals any other slot they choose. When a puck hits DOUBLE, its owner\'s collected winnings double.'
+    'Start: everyone has 20x to spend.',
+    'Auction: 8 slots are sold one by one, paid from your 20x. A bid in the last 3 seconds resets the timer to 3.',
+    'Drop: 3 pucks. The owner of each hit slot collects its value. Result: what you kept plus what you collected.',
+    'DOUBLE: its owner may steal 1 slot. A puck on DOUBLE doubles its owner\'s collected value.'
   ],
   create(ctx) {
     const ids = ctx.ids, vals = ctx.shuffle([5, 10, 15, 25, 30, 50, 75, 'DOUBLE']), n = vals.length;
@@ -845,10 +844,10 @@ const SLOTS = 12, LEAD = 2500, SAFE = 3;
 module.exports = {
   id: 'tilt', cat: 'drop', name: 'Tilt',
   rules: [
-    'Everyone has their own board and puck, dropping live. You have 3 nudges that tilt your board left or right.',
-    'A 4th nudge triggers TILT and destroys your puck.',
-    'You can spend 1 of your nudges on a rival\'s board instead of your own.',
-    'Finishing with 0 nudges used grants +3x on top of your slot.'
+    'Board: everyone drops on their own board.',
+    'Nudge: 3 nudges to tilt left or right (arrow keys work). A 4th is TILT: puck destroyed, 0x.',
+    'Rival: 1 of your nudges may go to a rival\'s board.',
+    'Bonus: 0 nudges used is +3x.'
   ],
   create(ctx) {
     const ids = ctx.ids, vals = slotValues(ctx, SLOTS, 0), x0 = 200 + ctx.rand() * 200;
@@ -911,10 +910,10 @@ const N = 64, OFF = [0, 16, 32, 48], NAMES = ['Green', 'Blue', 'Yellow', 'Purple
 module.exports = {
   id: 'draft', cat: 'prod', name: 'Flapper Draft',
   rules: [
-    'The wheel has 4 flappers. Players pick a flapper in reverse ranking order: the lowest balance picks first.',
-    'Players sharing a flapper split its result. Being the only player on your flapper grants +50%.',
-    'Each player has 1 Jam card: it forces a rival\'s flapper to skip 1 segment when the wheel stops.',
-    'A flapper on DOUBLE or TRIPLE multiplies itself and the wheel spins again for it.'
+    'Draft: pick 1 of 4 flappers. Lowest balance picks first.',
+    'Split: players on the same flapper split its result. Alone is +50%.',
+    'Jam: once, make a rival\'s flapper read 1 segment further.',
+    'DOUBLE or TRIPLE: multiplies that flapper and spins again for it.'
   ],
   create(ctx) {
     const ids = ctx.ids;
@@ -997,10 +996,9 @@ const N = 64, BUDGET = 6, PAINT_MS = 20000, SPIN_MS = 5000, SCORING = 3, MAX_JAC
 module.exports = {
   id: 'paint', cat: 'prod', name: 'Paint the Wheel',
   rules: [
-    'Claim 6 of the 64 segments with your color. Painting over a rival\'s segment costs double (2 of your 6 points). DOUBLE and TRIPLE stay neutral.',
-    'The wheel spins 3 scoring times. The owner of the landing segment collects its value, and the owners of the 2 neighbouring segments collect 50% of it.',
-    'So steal claimed segments positioned next to high multipliers.',
-    'Landing on a neutral DOUBLE or TRIPLE multiplies every segment for everyone and spins again: a shared jackpot moment.'
+    'Paint: 6 points. A free segment costs 1, a rival\'s costs 2. DOUBLE and TRIPLE cannot be painted.',
+    'Score: 3 spins. The landing segment\'s owner collects its value, both neighbours collect 50%.',
+    'Jackpot: landing on DOUBLE or TRIPLE multiplies every segment and spins again (free spin).'
   ],
   create(ctx) {
     const ids = ctx.ids;
@@ -1066,10 +1064,11 @@ const SPIN_MS = 5000, DECIDE_MS = 10000, SPINS = 3, CAP = 2500, JACKPOT = 20000,
 module.exports = {
   id: 'push', cat: 'prod', name: 'Push Your Luck',
   rules: [
-    'The wheel spins and everyone takes the result. After each spin, secretly choose to cash out or stay.',
-    'Staying multiplies the next spin by your current result. Landing on the red BUST segment makes everyone still in lose everything.',
-    'Players who have cashed out can buy a Curse card for 25% of their result. It adds 1 extra BUST segment to the wheel.',
-    'Results are capped at 2,500x. The last player still in after 3 spins gets the 20,000x jackpot cap.'
+    'Spin: everyone still in takes the result. Each next spin multiplies it.',
+    'Decide: after each spin, secretly Stay or Cash out. Max 3 spins.',
+    'BUST: everyone still in drops to 0.',
+    'Curse: once out, pay 25% of your result to add 1 BUST to the wheel.',
+    'Cap: 2,500x. The only player in after 3 spins is capped at 20,000x.'
   ],
   create(ctx) {
     const ids = ctx.ids;
@@ -1145,10 +1144,10 @@ const N = 40, LEAD = 3000, BRAKE = 0.55, C1 = 0.16, C0 = 1.6, STOP = 2;   // spe
 module.exports = {
   id: 'brake', cat: 'prod', name: 'Brake Battle',
   rules: [
-    'Every player has their own flapper on the wheel. The wheel spins and each player gets 1 brake press.',
-    'Each press slows the wheel hard. The last player to press effectively decides where it stops, but wait too long and the wheel stops on its own.',
-    'You get the segment under your flapper. DOUBLE pays 2x the next segment.',
-    'If your press stops the wheel directly and your flapper is on a DOUBLE, you gain a Shield.'
+    'Brake: you get 1 press. It cuts the wheel\'s speed by about half.',
+    'Stop: the wheel stops once it is slow enough, by a press or on its own.',
+    'Score: the segment under your flapper. DOUBLE pays 2x the next segment.',
+    'Shield: stop the wheel with your press while your flapper is on DOUBLE.'
   ],
   C1, C0, STOP,
   create(ctx) {

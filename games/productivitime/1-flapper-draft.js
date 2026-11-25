@@ -5,10 +5,10 @@ const N = 64, OFF = [0, 16, 32, 48], NAMES = ['Green', 'Blue', 'Yellow', 'Purple
 module.exports = {
   id: 'draft', cat: 'prod', name: 'Flapper Draft',
   rules: [
-    'The wheel has 4 flappers. Players pick a flapper in reverse ranking order: the lowest balance picks first.',
-    'Players sharing a flapper split its result. Being the only player on your flapper grants +50%.',
-    'Each player has 1 Jam card: it forces a rival\'s flapper to skip 1 segment when the wheel stops.',
-    'A flapper on DOUBLE or TRIPLE multiplies itself and the wheel spins again for it.'
+    'Draft: pick 1 of 4 flappers. Lowest balance picks first.',
+    'Split: players on the same flapper split its result. Alone is +50%.',
+    'Jam: once, make a rival\'s flapper read 1 segment further.',
+    'DOUBLE or TRIPLE: multiplies that flapper and spins again for it.'
   ],
   create(ctx) {
     const ids = ctx.ids;

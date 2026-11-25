@@ -5,10 +5,11 @@ const SPIN_MS = 5000, DECIDE_MS = 10000, SPINS = 3, CAP = 2500, JACKPOT = 20000,
 module.exports = {
   id: 'push', cat: 'prod', name: 'Push Your Luck',
   rules: [
-    'The wheel spins and everyone takes the result. After each spin, secretly choose to cash out or stay.',
-    'Staying multiplies the next spin by your current result. Landing on the red BUST segment makes everyone still in lose everything.',
-    'Players who have cashed out can buy a Curse card for 25% of their result. It adds 1 extra BUST segment to the wheel.',
-    'Results are capped at 2,500x. The last player still in after 3 spins gets the 20,000x jackpot cap.'
+    'Spin: everyone still in takes the result. Each next spin multiplies it.',
+    'Decide: after each spin, secretly Stay or Cash out. Max 3 spins.',
+    'BUST: everyone still in drops to 0.',
+    'Curse: once out, pay 25% of your result to add 1 BUST to the wheel.',
+    'Cap: 2,500x. The only player in after 3 spins is capped at 20,000x.'
   ],
   create(ctx) {
     const ids = ctx.ids;

@@ -26,6 +26,23 @@
     'two one ten one five one spare two one two one grab ' +
     'one five one drop two one spare one five two one ten').split(' ');
 
+  // ---- Crowd weighting: the wheel leans slightly away from popular fields ----
+  // players: share of this round's bettors on the field (needs 2+ bettors)
+  // stake:   share of all Orra staked this round that sits on the field
+  // weight = 1 - CROWD_PLAYERS * players - CROWD_STAKE * stake, floor 1 - CROWD_MAX
+  // Example, 4 bettors: 3 on Ten holding 60% of the Orra -> 1 - .12*.75 - .12*.6 = 0.84 (16% less likely).
+  const CROWD_PLAYERS = 0.12, CROWD_STAKE = 0.12, CROWD_MAX = 0.24;
+  function crowdWeights(stakes) {
+    const out = {}, bettors = Object.values(stakes || {}).filter(b => Object.values(b).some(x => x > 0));
+    let total = 0; for (const b of bettors) for (const x of Object.values(b)) total += x;
+    for (const k of KEYS) {
+      const on = bettors.filter(b => b[k] > 0).length, amt = bettors.reduce((a, b) => a + (b[k] || 0), 0);
+      const pl = bettors.length >= 2 ? on / bettors.length : 0, st = total ? amt / total : 0;
+      out[k] = Math.max(1 - CROWD_MAX, 1 - CROWD_PLAYERS * pl - CROWD_STAKE * st);
+    }
+    return out;
+  }
+
   // ---- Seeded RNG (mulberry32) ----
   function rng(seed) {
     let a = seed >>> 0;
@@ -180,5 +197,5 @@
     return { pts, hits };
   }
 
-  return { TYPES, KEYS, BONUS_KEYS, BORING, DIAL, rng, Board, basePegs, pegSpotOk, BW, BH, PEG_R, PUCK_R, SLOT_Y, GW, GH, TR, GUN, trace };
+  return { TYPES, KEYS, BONUS_KEYS, BORING, DIAL, crowdWeights, CROWD_MAX, rng, Board, basePegs, pegSpotOk, BW, BH, PEG_R, PUCK_R, SLOT_Y, GW, GH, TR, GUN, trace };
 });

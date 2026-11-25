@@ -5,10 +5,10 @@ const N = 36, TRAP_MS = 15000, PICK_MS = 12000;
 module.exports = {
   id: 'traps', cat: 'grab', name: 'Trap Setter',
   rules: [
-    'Every target shows its multiplier. First, secretly place 2 traps on targets.',
-    'Then everyone picks one target. Players on the same target split its value.',
-    'Picking a trapped target costs you 3x per trap, and that 3x goes to the player who set it. Your own traps do nothing to you.',
-    'Picking a target that nobody trapped and nobody else chose grants +2x.'
+    'Trap: place 2 secret traps on the 36 targets.',
+    'Pick: choose 1 target. Players on the same target split its value.',
+    'Hit: each rival trap on your pick costs you 3x and pays it to the trapper. Your own traps do nothing.',
+    'Bonus: alone on a target nobody trapped is +2x.'
   ],
   create(ctx) {
     const ids = ctx.ids, vals = ctx.shuffle(pool([[2, 6], [3, 6], [5, 6], [8, 5], [10, 4], [15, 3], [20, 3], [30, 2], [50, 1]]));

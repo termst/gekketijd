@@ -5,10 +5,10 @@ const N = 40, LEAD = 3000, BRAKE = 0.55, C1 = 0.16, C0 = 1.6, STOP = 2;   // spe
 module.exports = {
   id: 'brake', cat: 'prod', name: 'Brake Battle',
   rules: [
-    'Every player has their own flapper on the wheel. The wheel spins and each player gets 1 brake press.',
-    'Each press slows the wheel hard. The last player to press effectively decides where it stops, but wait too long and the wheel stops on its own.',
-    'You get the segment under your flapper. DOUBLE pays 2x the next segment.',
-    'If your press stops the wheel directly and your flapper is on a DOUBLE, you gain a Shield.'
+    'Brake: you get 1 press. It cuts the wheel\'s speed by about half.',
+    'Stop: the wheel stops once it is slow enough, by a press or on its own.',
+    'Score: the segment under your flapper. DOUBLE pays 2x the next segment.',
+    'Shield: stop the wheel with your press while your flapper is on DOUBLE.'
   ],
   C1, C0, STOP,
   create(ctx) {
