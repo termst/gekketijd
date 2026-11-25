@@ -181,13 +181,20 @@ const Glove = (() => {
   }
 
   // ---------------------------------------------------------------- Runtime: cancellable actions
-  let cur = null, mv = null;
+  let cur = null, mv = null, lastSpeedSnd = 0;
+  // Sound (sfx.js), panned a little toward where the glove is on screen.
+  function snd(grp, o = {}, x) {
+    if (typeof Sfx === 'undefined') return null;
+    if (x != null && W > 1) o = { pan: clamp(x / W * 2 - 1, -1, 1) * .55, ...o };
+    return Sfx.play(grp, o);
+  }
   const waits = [], queue = [];
   function kill(tok) {
     if (!tok || tok.dead) return; tok.dead = true;
     for (let i = waits.length - 1; i >= 0; i--) if (waits[i].tok === tok) { waits[i].rej(CANCEL); waits.splice(i, 1); }
     if (mv && mv.tok === tok) { mv.rej(CANCEL); mv = null; }
     if (rig.lockTok === tok) unlock();
+    if (tok.snd) tok.snd.forEach(h => h.stop(200));
     rig.trem.to(0); breath = 1;
   }
   function run(name, fn, pri = 0, d) {
@@ -247,7 +254,9 @@ const Glove = (() => {
       hov: v => rig.hov.to(v), trem: v => rig.trem.to(v, 40), breath: v => { breath = v; },
       over: v => { rig.over = !!v; },
       lock: fn => { chk(); lock(tok, fn); }, unlock,
-      burst: (x, y, kind, p) => burst(x, y, kind, p),
+      burst: (x, y, kind, p, s) => burst(x, y, kind, p, s),
+      // o.hold: the sound belongs to this gesture and fades out when it ends or is cut off
+      snd: (grp, o = {}, x = rig.x.x) => { chk(); const h = snd(grp, o, x); if (h && (o.hold || o.loop)) (tok.snd || (tok.snd = [])).push(h); return h; },
       tip: liveTip, screenOf,
       soft: () => { rig.x.k = rig.y.k = KP; rig.x.z = rig.y.z = .9; rig.z.k = 28; rig.bank = .8; },
     };
@@ -257,7 +266,19 @@ const Glove = (() => {
   // ---------------------------------------------------------------- Particles (impact only, never moves the UI)
   const parts = [];
   const FXC = ['#FFF4DC', '#FFF0B8', '#F2C65A', '#ffffff', '#e8e4ff'];
-  function burst(x, y, kind = 'impact', p = 1) {
+  function burst(x, y, kind = 'impact', p = 1, s) {
+    if (s !== false) {
+      const q = clamp(p, 0, 1.5);
+      if (s) snd(s, { vol: .75 + q * .25 }, x);
+      else if (kind === 'impact') snd('glove-punch', { vol: .6 + q * .35, rate: 1.08 - q * .1 }, x);
+      else if (kind === 'tap' && p > .5) snd('glove-tap', { vol: .45 + q * .4 }, x);
+      else if (kind === 'knock') snd('glove-tap', { vol: .9 + q * .3, rate: .72 }, x);
+      else if (kind === 'snap') snd('glove-snap', { vol: .65 + q * .3 }, x);
+      else if (kind === 'crack') snd('glove-snap', { vol: .4, rate: 1.35 }, x);
+      else if (kind === 'grab') snd('glove-wheel-grab', { vol: .55 + q * .35 }, x);
+      else if (kind === 'whoosh') snd('glove-whoosh', { vol: 1, rate: .92 }, x);
+      else if (kind === 'speed' && !CALM && now() - lastSpeedSnd > 1100 && Math.random() < .3) { lastSpeedSnd = now(); snd('glove-whoosh', { vol: .3 }, x); }
+    }
     if (CALM && kind !== 'tap') p *= .4;
     const add = o => parts.push({ age: 0, ...o });
     if (kind === 'impact') {
@@ -549,7 +570,7 @@ const Glove = (() => {
     const back = S0 * rnd(1.8, 2.6) * p;
     await c.goPt('knuck', tx - Math.cos(from) * back, ty - Math.sin(from) * back, { speed: 1300, path: any(['arc', 's', 'swoop']), z: z + .2, ease: 'cubic' });
     c.trem(.6 * p); await c.wait(rnd(120, 320)); c.trem(0);
-    c.scale(1.08, 300);
+    c.scale(1.08, 300); if (chance(.55)) c.snd('glove-whoosh', { vol: .35 + p * .2, rate: 1.1 }, tx);
     await c.goPt('knuck', tx, ty, { dur: rnd(90, 140), path: 'direct', ease: 'in', k: 1100, damp: .7, bank: 0, z });
     c.burst(tx, ty, 'impact', p); c.scale(.94, 500);
     await c.goPt('knuck', tx - Math.cos(from) * S0 * .55, ty - Math.sin(from) * S0 * .55, { dur: 190, path: 'direct', ease: 'out', k: 500, bank: 0, z });
@@ -576,6 +597,7 @@ const Glove = (() => {
       await show(c, { pose: 'thumb', which: 'thumb', ang: -PI / 2, yaw, pitch: 0, z: rnd(.5, .8), over: d.over, speed: 900 });
       await c.wait(rnd(150, 350));
       // slow arena turn from up to down
+      c.snd('glove-thumbs-down');
       const r0 = rig.roll.t; await c.tween(rnd(700, 1100), u => rig.roll.to(r0 + PI * u, 140), E.cubic);
       await bob(c, 2, S0 * .35, 150);
       await c.wait(rnd(300, 600));
@@ -608,7 +630,7 @@ const Glove = (() => {
       await c.go(w[0], w[1], { z: .7, speed: 1000, path: pathPick() });
       for (let i = 0; i < 1 + Math.floor(rnd(1, 3)); i++) {
         c.thumb([1.3, .9, null, null], 900); await c.wait(70);
-        const tp = c.tip('index'); c.burst(tp[0], tp[1], 'snap', .8);
+        const tp = c.tip('index'); c.burst(tp[0], tp[1], 'snap', .8, 'glove-fingerguns');
         c.orient(null, null, pitch - .55, 600); c.depth(.55, 300); await c.wait(130);
         c.thumb([1.3, 0], 300); c.orient(null, null, pitch, 200); c.depth(.7, 100); await c.wait(rnd(180, 300));
       }
@@ -670,7 +692,7 @@ const Glove = (() => {
       const [tx, ty] = [r.left + r.width / 2, r.top + r.height * .4];
       c.pose('flat', 120); c.aim('palm', PI / 2 + rnd(-.3, .3), 0, -.95, 90);
       await c.goPt('palm', tx, ty - S0 * .5, { speed: 900, z: .15, path: pathPick() });
-      for (let i = 0; i < 3; i++) { await c.goPt('palm', tx, ty, { dur: 90, ease: 'in', k: 900, path: 'direct', bank: 0 }); c.burst(tx, ty, 'tap', 1.3); await c.goPt('palm', tx, ty - S0 * .45, { dur: 150, ease: 'out', k: 500, path: 'direct', bank: 0 }); }
+      for (let i = 0; i < 3; i++) { await c.goPt('palm', tx, ty, { dur: 90, ease: 'in', k: 900, path: 'direct', bank: 0 }); c.burst(tx, ty, 'tap', 1.3, 'glove-slap'); await c.goPt('palm', tx, ty - S0 * .45, { dur: 150, ease: 'out', k: 500, path: 'direct', bank: 0 }); }
     },
     async presentTable(c) {
       const r = pickEl('table'); if (!r) return R.wave(c);
@@ -687,10 +709,12 @@ const Glove = (() => {
       await c.goPt('tips', tx, ty, { speed: d.fast ? 1400 : 800, z: .15, path: pathPick() });
       c.hov(.25);
       const reps = d.reps || 3 + Math.floor(rnd(0, 4)), sp = d.fast ? 40 : rnd(60, 95);
+      const roll = c.snd('glove-drumroll', d.fast ? { hold: true } : { hold: true, vol: .45, rate: rnd(.86, .95) }, tx);
       for (let k = 0; k < reps; k++) for (const f of [3, 2, 1, 0]) {
         c.finger(f, [.95, .6, .3], 900); await c.wait(sp); c.finger(f, [.22, .3, .16], 500);
-        if (f === 0 && chance(.5)) { const tp = c.tip('index'); c.burst(tp[0], tp[1], 'tap', .5); }
+        if (f === 0 && chance(.5)) { const tp = c.tip('index'); c.burst(tp[0], tp[1], 'tap', .5, false); }
       }
+      if (roll) roll.stop(d.fast ? 120 : 220);
       c.hov(1); await c.wait(sp * 3); c.pose('relax', 100);
     },
     async drumroll(c, d) { await R.drum(c, { fast: true, reps: 7 + Math.floor(rnd(0, 4)), r: pickEl('say') || pickEl('box'), ...d }); },
@@ -726,13 +750,14 @@ const Glove = (() => {
       const w = wristFor(tipOf('middle', 'mid'), at[0], at[1], rig.roll.t, rig.yaw.t, .3, .7);
       rig.x.x = rig.x.t = w[0]; rig.y.x = rig.y.t = Hh + S0 * 3;
       await c.go(w[0], w[1], { dur: 1100, path: 'direct', z: .7, ease: 'cubic' });
-      setFinger(1, [0, .03, .02], 18); await c.wait(1300);
+      setFinger(1, [0, .03, .02], 18); c.snd('glove-middle'); await c.wait(1300);
       c.depth(.98, 40); c.scale(1.08, 60); await c.wait(900); c.depth(.7, 60); c.scale(1, 60); await c.wait(500);
     },
     async middleJab(c) {
       c.over(true); c.pose('middle', 400);
       const at = towardViewer(); c.aim('middle', -PI / 2 + rnd(-.2, .2), rnd(-.3, .3), .35, 200);
       await c.goPt('mid', at[0], at[1], { speed: 1800, path: any(['direct', 'lurch', 'swoop']), z: .65 });
+      c.snd('glove-middle');
       for (let i = 0; i < 3; i++) { c.depth(1.05, 500); c.scale(1.12, 600); await c.wait(120); const tp = c.tip('middle'); c.burst(tp[0], tp[1], 'tap', 1.2); c.depth(.65, 300); c.scale(1, 300); await c.wait(220); }
       await c.wait(900);
     },
@@ -740,7 +765,7 @@ const Glove = (() => {
       c.over(true); c.pose('middle', 200);
       const at = towardViewer(); c.orient(rnd(-.2, .2), PI, .2, 80);
       await c.goPt('mid', at[0], at[1], { speed: 1000, path: pathPick(), z: .6 });
-      await c.wait(250); c.orient(null, rnd(-.15, .15), .35, 30); await c.wait(1100);
+      await c.wait(250); c.orient(null, rnd(-.15, .15), .35, 30); c.snd('glove-middle'); await c.wait(1100);
       await rock(c, 2, .08, 260, rig.roll.t); await c.wait(500);
     },
     async middleRise(c) {
@@ -749,7 +774,7 @@ const Glove = (() => {
       const w = wristFor(tipOf('middle', 'middle'), x, Hh - S0 * 1.2, roll, rig.yaw.t, .15, .5);
       rig.x.x = rig.x.t = w[0]; rig.y.x = rig.y.t = Hh + S0 * 4; rig.z.x = rig.z.t = .5;
       await c.go(w[0], w[1], { dur: 2200, path: 'direct', ease: 'lurch', z: .5 });
-      c.trem(.25); await c.wait(1200); c.trem(0);
+      c.snd('glove-middle'); c.trem(.25); await c.wait(1200); c.trem(0);
       await c.go(w[0], Hh + S0 * 4, { dur: 600, path: 'direct', ease: 'in' });
     },
     async middleDouble(c) {
@@ -757,7 +782,7 @@ const Glove = (() => {
       for (let k = 0; k < 2; k++) {
         c.pose('fist', 300); const at = freshSpot(stageSpot); c.aim('middle', -PI / 2 + rnd(-.3, .3), rnd(-.3, .3), .3, 200);
         await c.goPt('mid', at[0], at[1], { speed: 1600, path: any(['arc', 'swoop']), z: .6 });
-        c.pose('middle', 900); c.scale(1.12, 600); await c.wait(160); c.scale(1, 200); await c.wait(rnd(700, 900));
+        c.pose('middle', 900); c.snd('glove-middle', { vol: k ? 1 : .85 }); c.scale(1.12, 600); await c.wait(160); c.scale(1, 200); await c.wait(rnd(700, 900));
       }
     },
     // ---- big win extras
@@ -1065,7 +1090,7 @@ const Glove = (() => {
     c.orient(h.roll, gp.yaw, gp.pitch, 300);
     await c.go(h.x, h.y, { path: 'direct', dur: fast ? 170 : lerp(420, 170, plan.k), ease: plan.k > .5 ? 'expo' : 'cubic', k: 650, z: zG });
     c.pose(gp.pose, 700); c.hov(0);
-    c.burst(h.px, h.py, 'grab', .4 + plan.k);
+    c.burst(h.px, h.py, 'grab', .4 + plan.k, plan.grip === 'slap' ? 'glove-slap' : undefined);
     const a0 = (wheel() || w).a;
     c.lock(() => { const w2 = wheel(); if (!w2) return null; const hh = handAt(w2, ang0 + (w2.a - a0), 0); rig.roll.toA(hh.roll, 900); rig.z.to(zG, 200); return [hh.x, hh.y]; });
     // wind up: drag the wheel backwards a little
@@ -1085,6 +1110,7 @@ const Glove = (() => {
     const fl = [clamp(rig.x.x + vx * .3, S0, W - S0), clamp(rig.y.x + vy * .3, S0, Hh - S0)];
     rig.x.t = fl[0]; rig.y.t = fl[1];
     if (plan.bucket === 'monster') burst(rig.x.x, rig.y.x, 'whoosh', Math.atan2(vy, vx) + PI);
+    else if (plan.k > .45) snd('glove-whoosh', { vol: .35 + plan.k * .5 }, rig.x.x);
     if (plan.k < .2) { c.pose('relax', 200); c.orient(rig.roll.t + sgn() * rnd(.6, 1.2), null, 0, 50); await c.wait(500); }
     else if (plan.k < .62) { c.pose('open', 400); c.depth(.35); await c.wait(350); c.pose('relax', 90); await c.wait(400); }
     else {
@@ -1109,6 +1135,7 @@ const Glove = (() => {
       const w = wheel(); if (!w) return;
       c.pose('relax', 100); c.aim('tips', PI / 2, 0, -.6, 60);
       await c.goPt('tips', w.x + w.r * rnd(-.25, .25), w.y - w.r * 1.05, { speed: 700, z: .3, path: pathPick() });
+      c.snd('glove-drumroll', { loop: true, vol: .3, rate: rnd(.9, 1) });
       for (;;) for (const f of [3, 2, 1, 0]) { c.finger(f, [.9, .6, .3], 900); await c.wait(55); c.finger(f, [.22, .3, .16], 500); }
     },
     async clench(c) {
@@ -1225,7 +1252,7 @@ const Glove = (() => {
     // entrance: drops in from above, presents itself
     rig.x.x = rig.x.t = W * rnd(.3, .7); rig.y.x = rig.y.t = -S0 * 4; rig.z.x = rig.z.t = .6;
     started = true;
-    run('enter', async c => { c.pose('open', 60); c.orient(rnd(-.3, .3), PI, -.3, 40); await c.goPt('mid', W * rnd(.35, .65), Hh * .32, { dur: 1600, path: 's', ease: 'cubic', z: .55 }); await R.wave(c); }, 3);
+    run('enter', async c => { c.snd('glove-enter', { delay: 250, late: 2000 }, W / 2); c.pose('open', 60); c.orient(rnd(-.3, .3), PI, -.3, 40); await c.goPt('mid', W * rnd(.35, .65), Hh * .32, { dur: 1600, path: 's', ease: 'cubic', z: .55 }); await R.wave(c); }, 3);
     requestAnimationFrame(frame);
   }
   function room(info) {

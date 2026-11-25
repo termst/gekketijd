@@ -18,25 +18,10 @@ const RH = (() => {
   const initials = n => (String(n).replace(/[^\p{L}\p{N}]/gu, '') || '?').slice(0, 2).toUpperCase();
 
   // ---- Sound ----
-  let sound = store.get('rh-sound') !== 'off', ac;
-  const audio = () => { ac = ac || new (window.AudioContext || window.webkitAudioContext)(); if (ac.state === 'suspended') ac.resume(); return ac; };
-  function tone(f, d = .08, v = .05) { if (!sound) return; try { audio(); const o = ac.createOscillator(), g = ac.createGain(); o.type = 'triangle'; o.frequency.value = f; g.gain.setValueAtTime(v, ac.currentTime); g.gain.exponentialRampToValueAtTime(.0001, ac.currentTime + d); o.connect(g).connect(ac.destination); o.start(); o.stop(ac.currentTime + d); } catch {} }
-  // Sample sound effects in sfx/<name>.mp3, decoded once and played through Web Audio.
-  const SFX = {};
-  function loadSfx(n) {
-    if (!SFX[n]) SFX[n] = fetch('sfx/' + n + '.mp3').then(r => r.arrayBuffer()).then(a => new Promise((ok, no) => audio().decodeAudioData(a, ok, no))).then(b => SFX[n] = b).catch(() => { SFX[n] = null; });
-    return SFX[n];
-  }
-  function sfx(n, v = .8) {
-    if (!sound) return;
-    try {
-      const b = SFX[n];
-      if (b === undefined) return loadSfx(n).then(() => SFX[n] && sfx(n, v));
-      if (!b || typeof b.then === 'function') return;
-      const c = audio(), src = c.createBufferSource(), g = c.createGain(); g.gain.value = v; src.buffer = b; src.connect(g).connect(c.destination); src.start();
-    } catch {}
-  }
-  const fanfare = () => [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => tone(f, .25, .07), i * 110));
+  // Samples and synth blips both run through Sfx (sfx.js): variant shuffle, pitch/level spread, soft fades.
+  let sound = store.get('rh-sound') !== 'off'; Sfx.on = sound;
+  const tone = (f, d = .08, v = .05) => Sfx.tone(f, d, v);
+  const sfx = (n, v = .8, o = {}) => Sfx.play(n, { vol: v / .8, ...o });
 
   // ---- Connection ----
   let ws = null, token = store.get('rh-token') || '', myName = store.get('rh-name') || '', roomCode = null, off = 0, bestRtt = 1e9;
@@ -336,13 +321,13 @@ const RH = (() => {
   }
   // Server dictates the landing field and the duration (3 to 7 s); we animate toward it.
   // The Glove (glove.js) grabs the wheel first: it may ask for a short delay and sets the spin force (turns and curve).
-  let spinKey = null, spinRaf = 0, spinWait = 0, spinLive = false;
+  let spinKey = null, spinRaf = 0, spinWait = 0, spinLive = false, spinSnd = null, tickMat = 0;
   const zoom = z => { if (!CALM) $('stage').dataset.zoom = z; };
   const G_ = window.Glove || null;
   const wheelInfo = () => { const r = $('wheel').getBoundingClientRect(); if (!r.width) return null; const s = r.width / W; return { x: r.left + CX * s, y: r.top + CY * s, r: R * s, a: angle }; };
   const wheelNudge = da => { if (spinLive || !face) return; angle += da; draw(); };
   function spinTo(sp) {
-    cancelAnimationFrame(spinRaf); clearTimeout(spinWait); hitSeg = -1;
+    cancelAnimationFrame(spinRaf); clearTimeout(spinWait); hitSeg = -1; if (spinSnd) { spinSnd.stop(200); spinSnd = null; }
     const plan = G_ ? G_.spin(sp, Math.max(0, sp.dur - (now() - sp.at))) : null;
     spinWait = setTimeout(() => spinRun(sp, plan), plan ? plan.delay : 0);
   }
@@ -351,13 +336,17 @@ const RH = (() => {
     const remain = Math.max(300, sp.dur - (now() - sp.at)), shape = plan ? plan.shape(remain) : { turns: null, e: 3.4, pa: 0 };
     const turns = CALM ? 1 : shape.turns || sp.turns, curve = G_ ? G_.spinCurve(shape) : p => 1 - Math.pow(1 - p, 3.4);
     const dist = ((target - from) % TAU + TAU) % TAU + turns * TAU;
-    const t0 = performance.now(); let seg = null, close = false;
+    const t0 = performance.now(); let seg = null, close = false, lastTick = 0;
     spinLive = true; zoom(1); if (G_) G_.spinGo({ remain });
+    // Whirr: harder spins play a touch higher, it fades out over the slow down. One flapper material per spin, others mixed in.
+    const force = Math.min(1, turns * TAU / Math.max(1, remain / 1000) / 30);
+    spinSnd = Sfx.play('wheel-spin-mechanical', { rate: .94 + force * .14, vol: .8 + force * .3, dur: remain * .92, fadeOut: remain * .55 });
+    tickMat = Math.floor(Math.random() * 3);
     const stepF = () => {
       const p = Math.min(1, (performance.now() - t0) / remain); angle = from + dist * curve(p);
-      const s = Math.floor(angle / (TAU / N) + .5); flap *= .8; if (seg !== null && s !== seg) { flap = .26; tone(850, .03, .03); } seg = s; blink = Math.floor(p * 40);
+      const s = Math.floor(angle / (TAU / N) + .5); flap *= .8; if (seg !== null && s !== seg) { flap = .26; const tn = performance.now(), gapT = tn - lastTick; lastTick = tn; Sfx.play('flapper-tick', { file: 'flapper-tick-' + (1 + (Math.random() < .7 ? tickMat : Math.floor(Math.random() * 3))), vol: .55 + Math.min(.6, gapT / 250), rate: 1.08 - Math.min(.14, gapT / 1500) }); } seg = s; blink = Math.floor(p * 40);
       if (!close && remain - (performance.now() - t0) <= Math.max(1300, remain * .45)) { close = true; zoom(2); }
-      if (p >= 1) { flap = 0; angle %= TAU; hitSeg = sp.idx; spinLive = false; draw(); return; }
+      if (p >= 1) { flap = 0; angle %= TAU; hitSeg = sp.idx; spinLive = false; if (spinSnd) { spinSnd.stop(260); spinSnd = null; } Sfx.play('wheel-land-settle'); settledAt = performance.now(); draw(); return; }
       draw(); spinRaf = requestAnimationFrame(stepF);
     };
     spinRaf = requestAnimationFrame(stepF);
@@ -365,7 +354,7 @@ const RH = (() => {
 
   // ---- Table ----
   const GROUPS = { num: KEYS.filter(k => TYPES[k].pay), bonus: BONUS_KEYS };
-  let chip = 5, myTot = 0, pendingRepeat = false, lastPhase = null, lastRound = -1, lastWinShown = null, players0 = {}, gloveKey = '';
+  let settledAt = 0, landAt = 0, chip = 5, myTot = 0, pendingRepeat = false, lastPhase = null, lastRound = -1, lastWinShown = null, players0 = {}, gloveKey = '';
   function setupTable() {
     cx = $('wheel').getContext('2d');
     // Desk: raffle tickets, numbers left and bonuses right, each 2x2 group with a chip stack badge in the middle
@@ -384,12 +373,12 @@ const RH = (() => {
     document.querySelectorAll('.coin').forEach(b => b.onclick = () => { chip = +b.dataset.v; renderChips(); });
     $('clear').onclick = () => send({ t: 'clear' });
     $('again').onclick = () => { pendingRepeat = true; send({ t: 'repeat' }); };
-    loadSfx('token_place'); loadSfx('no_tokens_left');
+    Sfx.preload();
     $('go').onclick = () => { send({ t: 'ready' }); tone(660, .15); if (G_) G_.emit('ready'); };
     $('help').onclick = () => { rulesDialog(); $('rules').showModal(); };
     $('shop').onclick = () => { shop(); $('work').showModal(); };
     const sndLabel = () => { $('snd').textContent = 'Sound ' + (sound ? 'on' : 'off'); $('snd').setAttribute('aria-pressed', sound); };
-    sndLabel(); $('snd').onclick = () => { sound = !sound; store.set('rh-sound', sound ? 'on' : 'off'); sndLabel(); if (sound) sfx('token_place', .5); };
+    sndLabel(); $('snd').onclick = () => { sound = !sound; Sfx.on = sound; store.set('rh-sound', sound ? 'on' : 'off'); sndLabel(); if (sound) sfx('token_place', .5); };
     ['rules', 'work'].forEach(id => $(id).onclick = e => { if (e.target === $(id)) $(id).close(); });
     $('invite').onclick = () => {
       const link = location.origin + location.pathname + '?join=' + S.code;
@@ -444,9 +433,9 @@ const RH = (() => {
   <p class="note">${fmt(me.need - me.xp)} XP to level ${me.lvl + 1}. Every 5 Orra you bet gives 1 XP.</p></section>
  <section class="dcard"><h3>Inventory</h3><div class="inv"><div><b>${me.items.shield || 0}</b><small>Shield</small></div><div><b>${me.items.swap || 0}</b><small>Swap token</small></div></div>
   <p class="note">Shield: blocks the next attack on you. Swap token: forces a rival to switch sides.</p></section></div>`;
-    $('w1').onclick = () => { send({ t: 'cashier', op: 'collect' }); sfx('token_place'); };
+    $('w1').onclick = () => { send({ t: 'cashier', op: 'collect' }); sfx('token_place'); Sfx.play('coin-stream', { vol: .6, dur: 900, fadeOut: 450, delay: 60 }); };
     $('w2').onclick = () => send({ t: 'cashier', op: 'upgrade' });
-    $('w3').onclick = () => { send({ t: 'cashier', op: 'daily' }); sfx('token_place'); fanfare(); };
+    $('w3').onclick = () => { send({ t: 'cashier', op: 'daily' }); sfx('token_place'); Sfx.play('coin-stream', { delay: 80 }); Sfx.play('game-show', { vol: .7, delay: 120 }); };
   }
   function rulesDialog() {
     let h = `<section class="rsec"><h3>The table</h3><ul class="brules">
@@ -523,6 +512,8 @@ const RH = (() => {
     if (m.phase === 'betting' && lastPhase !== 'betting') { hitSeg = -1; draw(); document.body.classList.remove('won'); $('win').textContent = '0'; $('win').parentNode.classList.remove('up'); }
     // history
     $('hist').innerHTML = m.hist.slice(0, 10).map(k => { const t = TYPES[k]; return `<span class="${t.pay ? '' : 'bh'}" style="background:${SKIN[k].f};color:${t.pay ? SKIN[k].pl : '#FFE38A'}" title="${t.n}">${t.pay ? t.n : t.n.split(' ').map(w => w[0]).join('')}</span>`; }).join('');
+    // wheel at rest: landing sting first, so the result sounds below can wait on it
+    if (lastPhase === 'spinning' && m.phase !== 'spinning') { landAt = performance.now(); Sfx.play('wheel-land', { delay: Math.max(0, 140 - (landAt - settledAt)) }); }
     // messages and payouts
     let msg = m.msg;
     if (m.phase === 'payout' && m.results) {
@@ -533,7 +524,18 @@ const RH = (() => {
       if (row && row.vault) msg += ` +${fmt(row.vault)} saved to your wallet.`;
       $('win').textContent = fmt(row ? row.win : 0); $('win').parentNode.classList.toggle('up', !!(row && row.win > 0));
       const key2 = m.round + ':' + key;
-      if (row && row.win > 0 && lastWinShown !== key2) { lastWinShown = key2; fanfare(); document.body.classList.add('won'); }
+      if (row && lastWinShown !== key2) {
+        lastWinShown = key2;
+        const bonus = BONUS_KEYS.includes(key), won = bonus ? row.stake > 0 && row.m >= 1 : row.win > 0, lost = !won && (bonus ? row.stake > 0 : row.spent > 0);
+        // let the landing sting breathe before the result
+        const wait = Math.max(0, 420 - (performance.now() - landAt));
+        if (won) {
+          document.body.classList.add('won');
+          const big = Math.min(1, row.win / Math.max(1, (bonus ? row.stake : row.spent) * 6));
+          Sfx.play('win', { delay: wait });
+          Sfx.play('coin-stream', { delay: wait + 250 + Math.random() * 200, vol: .7 + big * .5, dur: 900 + big * 1300, fadeOut: 500 });
+        } else if (lost) Sfx.play('loss', { delay: wait });
+      }
       if (BONUS_KEYS.includes(key)) Bonus.results(m);
       if (G_ && gloveKey !== key2) {
         gloveKey = key2;
@@ -543,7 +545,7 @@ const RH = (() => {
     }
     if (G_ && m.phase === 'intro' && lastPhase !== 'intro') G_.emit('landedBonus');
     if (G_ && m.phase === 'landed' && lastPhase === 'spinning' && m.results && !m.results.rows.length) G_.emit('payout', { stake: 0, win: 0 });
-    if (m.phase === 'landed' && lastPhase === 'spinning') tone(780, .5, .08);
+    if (m.phase === 'spinning' && lastPhase === 'betting') Sfx.play('bets-closed');
     if (m.phase === 'betting' && lastRound !== m.round) { lastRound = m.round; tone(660, .4); }
     say(msg);
     if (m.phase === 'intro' && m.next) Bonus.intro(m);
@@ -569,7 +571,7 @@ const RH = (() => {
         box().innerHTML = `<div class="intro"><span class="cat">${CAT_NAMES[n.cat]}</span><h2>${esc(n.name)}</h2>
           <span class="badge"></span><div class="buyin" hidden></div>
           ${rulesList(n.rules)}<div class="bplayers"></div><div class="bt" style="--dur:${dur}ms"><i></i></div></div>`;
-        $('bonus').classList.add('on'); tone(440, .5);
+        $('bonus').classList.add('on'); Sfx.play('game-show', { delay: Math.max(0, 500 - (performance.now() - landAt)) });
         if (n.cap) {
           const bx = box().querySelector('.buyin'), start = Math.min(n.cap, Math.max(5, Math.round(n.cap / 2 / 5) * 5));
           bx.hidden = false;

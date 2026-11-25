@@ -113,7 +113,7 @@
       let a = st.w.a;
       if (st.w.w > 0) { const tstop = Math.log((st.w.w + k) / (2 + k)) / v.c1, T = Math.min(tau, Math.max(0, tstop)); a += (st.w.w + k) * (1 - Math.exp(-v.c1 * T)) / v.c1 - k * T; }
       const n = v.segs.length, fl = api.players.map(p => ({ off: v.off[p.id], color: p.color, label: api.name(p.id).slice(0, 6) }));
-      const seg = Math.floor(a + .5); if (st.seg !== undefined && seg !== st.seg && v.phase === 'live') tone(900, .02, .02); st.seg = seg;
+      const seg = Math.floor(a + .5); if (st.seg !== undefined && seg !== st.seg && v.phase === 'live') { if (window.Sfx) Sfx.play('flapper-tick', { vol: .7 }); else tone(900, .02, .02); } st.seg = seg;
       segWheel(c.getContext('2d'), { segs: v.segs, rot: a, fill: i => SEGC(v.segs[i]), text: i => label(v.segs[i]), flappers: fl,
         ring: i => v.phase === 'done' && api.players.some(p => ((Math.round(a) + v.off[p.id]) % n + n) % n === i) ? '#fff' : null });
     }
