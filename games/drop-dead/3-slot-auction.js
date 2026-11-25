@@ -5,10 +5,10 @@ const START = 20, LOT_MS = 5000, EXTEND = 3000, STEAL_MS = 10000, PUCKS = 3;
 module.exports = {
   id: 'auction', cat: 'drop', name: 'Slot Auction',
   rules: [
-    'Everyone starts with 20x. The bottom slots are auctioned one by one; you pay with part of your current multiplier. A raise keeps the lot open 3 more seconds.',
-    'Bid up slots you do not want to force rivals to overpay.',
-    'Then 3 pucks drop. The owner of each hit slot collects its value. Your final result is what you kept plus what you collected.',
-    'Whoever owns the DOUBLE slot steals any other slot they choose. When a puck hits DOUBLE, its owner\'s collected winnings double.'
+    'Start: everyone has 20x to spend.',
+    'Auction: 8 slots are sold one by one, paid from your 20x. A bid in the last 3 seconds resets the timer to 3.',
+    'Drop: 3 pucks. The owner of each hit slot collects its value. Result: what you kept plus what you collected.',
+    'DOUBLE: its owner may steal 1 slot. A puck on DOUBLE doubles its owner\'s collected value.'
   ],
   create(ctx) {
     const ids = ctx.ids, vals = ctx.shuffle([5, 10, 15, 25, 30, 50, 75, 'DOUBLE']), n = vals.length;

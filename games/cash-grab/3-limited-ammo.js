@@ -5,10 +5,10 @@ const ROWS = 8, COLS = 10, BULLETS = 3, GAME_MS = 30000, COOLDOWN = 1000;
 module.exports = {
   id: 'ammo', cat: 'grab', name: 'Limited Ammo Bounty',
   rules: [
-    'Everyone gets 3 bullets. The gallery is hidden. A shot claims the target it hits and reveals the entire row for everyone.',
-    'Shooting a target another player already claimed steals it from them.',
-    'Wait for information, or grab the high values before someone else does. You hold the sum of the targets you own at the end.',
-    'Every bullet you keep unused until the end converts into a Shield.'
+    'Shoot: 3 bullets, 30 seconds. Targets are hidden. A shot reveals its whole row.',
+    'Own: hit a free target to claim it. Hit a rival\'s target to steal it.',
+    'Score: the sum of the targets you own at the end.',
+    'Hold: unused bullets become Shields.'
   ],
   create(ctx) {
     const ids = ctx.ids, cells = ctx.shuffle(pool([[2, 16], [3, 14], [5, 14], [8, 10], [10, 8], [15, 6], [25, 6], [50, 4], [100, 2]])).map(v => ({ v, o: null }));

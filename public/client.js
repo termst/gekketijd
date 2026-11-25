@@ -63,13 +63,13 @@ const RH = (() => {
   // ---- Lobby screen ----
   // Run settings shown when creating a lobby. Values mirror RUN_OPTS in core.js, which checks them again.
   const RUN = [
-    ['start', 'Starting balance', 'Own wallet plays with your saved Orra. A fixed amount gives everyone the same fresh start, and part of every win is saved to your wallet.', [[0, 'Own wallet'], [500, '500'], [1000, '1K'], [2500, '2.5K'], [5000, '5K'], [10000, '10K']]],
-    ['bet', 'Betting time', 'Seconds to place bets each round.', [5, 8, 12, 15, 20, 30].map(v => [v, v + 's'])],
-    ['spin', 'Wheel spin time', 'How long the wheel turns before it lands.', [['short', 'Short 2-4s'], ['normal', 'Normal 3-7s'], ['long', 'Long 6-10s']]],
-    ['limit', 'Max bet per round', 'Level limit grows as you level up.', [['level', 'Level limit'], ['none', 'No limit']], 1],
-    ['late', 'Late buy-ins', 'Join bonus games you did not back.', [['on', 'On'], ['off', 'Off']], 1],
-    ['boost', 'Prime Minute', 'One field per round boosted x2 to x5.', [['on', 'On'], ['off', 'Off']], 1],
-    ['max', 'Max players', 'Lobby size, you included.', [2, 3, 4, 5, 6, 7, 8].map(v => [v, String(v)])]
+    ['start', 'Starting balance', 'Own wallet: play with your saved Orra. Fixed amount: everyone starts equal, part of each win goes to your wallet.', [[0, 'Own wallet'], [500, '500'], [1000, '1K'], [2500, '2.5K'], [5000, '5K'], [10000, '10K']]],
+    ['bet', 'Betting time', 'Seconds per round to bet.', [5, 8, 12, 15, 20, 30].map(v => [v, v + 's'])],
+    ['spin', 'Wheel spin time', 'Time before the wheel lands.', [['short', 'Short 2-4s'], ['normal', 'Normal 3-7s'], ['long', 'Long 6-10s']]],
+    ['limit', 'Max bet per round', 'Level limit grows with your level.', [['level', 'Level limit'], ['none', 'No limit']], 1],
+    ['late', 'Late buy-ins', 'Join bonus games you did not bet on.', [['on', 'On'], ['off', 'Off']], 1],
+    ['boost', 'Prime Minute', '1 field per round pays x2 to x5.', [['on', 'On'], ['off', 'Off']], 1],
+    ['max', 'Max players', 'Including you.', [2, 3, 4, 5, 6, 7, 8].map(v => [v, String(v)])]
   ];
   const RUN_DEF = { start: 0, bet: 8, spin: 'normal', limit: 'level', late: 'on', boost: 'on', max: 8 };
   let runCfg = (() => { try { const c = JSON.parse(store.get('rh-cfg') || 'null'); return { ...RUN_DEF, ...(c || {}) }; } catch { return { ...RUN_DEF }; } })();
@@ -93,7 +93,7 @@ const RH = (() => {
     $('cb').onclick = () => {
       if (!name()) return;
       pickCode = $('cv').value.toUpperCase().trim();
-      if (pickCode && !/^[A-Z0-9]{4}$/.test(pickCode)) { $('lerr').textContent = 'A custom code must be exactly 4 letters or digits, or leave it empty.'; $('cv').focus(); return; }
+      if (pickCode && !/^[A-Z0-9]{4}$/.test(pickCode)) { $('lerr').textContent = 'Code: exactly 4 letters or digits, or empty.'; $('cv').focus(); return; }
       $('scode').innerHTML = pickCode ? `Code <b>${esc(pickCode)}</b>` : 'Random code';
       view('setup'); opts(); $('sgo').focus();
     };
@@ -383,7 +383,7 @@ const RH = (() => {
     ['rules', 'work'].forEach(id => $(id).onclick = e => { if (e.target === $(id)) $(id).close(); });
     $('invite').onclick = () => {
       const link = location.origin + location.pathname + '?join=' + S.code;
-      (navigator.clipboard ? navigator.clipboard.writeText(link) : Promise.reject()).then(() => toast('Invite link copied. Send it to your friends.', 3200, 'ok'), () => prompt('Copy this invite link', link));
+      (navigator.clipboard ? navigator.clipboard.writeText(link) : Promise.reject()).then(() => toast('Invite link copied.', 3200, 'ok'), () => prompt('Copy this invite link', link));
     };
     if (!CALM) setInterval(() => { blink++; if (!S || S.phase !== 'spinning') draw(); }, 600);
     requestAnimationFrame(clockLoop);
@@ -392,8 +392,8 @@ const RH = (() => {
   function canBet(n, el) {
     const me = S.me, avail = me.bal - myTot, need = chip * n;
     const deny = t => { sfx('no_tokens_left'); toast(t, 2600, 'bad'); el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake'); return false; };
-    if (avail < 5) return deny(S.me.cashier.closed ? 'No Orra left in this run.' : 'No Orra left to bet. Open the Cashier to collect more.');
-    if (need > avail) return deny(n > 1 ? `Betting ${fmt(chip)} on all 4 needs ${fmt(need)} Orra. You have ${fmt(avail)} left.` : `Only ${fmt(avail)} Orra left. Pick a smaller chip.`);
+    if (avail < 5) return deny(S.me.cashier.closed ? 'No Orra left in this run.' : 'No Orra left. Collect more at the Cashier.');
+    if (need > avail) return deny(n > 1 ? `All 4 needs ${fmt(need)} Orra. You have ${fmt(avail)}.` : `Only ${fmt(avail)} Orra left. Use a smaller chip.`);
     if (myTot + need > me.limit) return deny(`Level ${me.lvl} limit: ${fmt(me.limit)} Orra per round.`);
     return true;
   }
@@ -418,8 +418,8 @@ const RH = (() => {
   function shop() {
     const c = S.me.cashier, me = S.me, pct = (a, b) => Math.max(0, Math.min(100, a / b * 100)).toFixed(1) + '%', nolim = me.limit >= 1e9;
     if (c.closed) {
-      $('workbody').innerHTML = `<div class="cards"><section class="dcard"><h3>Run balance</h3><p class="stat">${ORRA}${fmt(me.bal - myTot)}</p><p class="note">This run started everyone on ${fmt(S.cfg.start)} Orra. Wages and the daily bonus are paused until you play in a lobby with your own wallet.</p></section>
- <section class="dcard"><h3>Own wallet</h3><p class="stat">${ORRA}${fmt(me.wallet)}<small>saved ${fmt(me.vault.run)} of ${fmt(me.vault.cap)} this run</small></p><div class="meter"><i style="width:${pct(me.vault.run, me.vault.cap)}"></i></div><p class="note">Part of every winning round is saved here. Bigger multipliers save a bigger share, very large wins count less, the share shrinks as the run cap fills, and it is halved at a solo table. Today: ${fmt(me.vault.today)} of ${fmt(me.vault.day)}. It does not change your run balance; use it by picking Own wallet when you create a lobby.</p></section>
+      $('workbody').innerHTML = `<div class="cards"><section class="dcard"><h3>Run balance</h3><p class="stat">${ORRA}${fmt(me.bal - myTot)}</p><p class="note">Everyone started on ${fmt(S.cfg.start)} Orra. Wages and daily bonus only work in Own wallet lobbies.</p></section>
+ <section class="dcard"><h3>Own wallet</h3><p class="stat">${ORRA}${fmt(me.wallet)}<small>saved ${fmt(me.vault.run)} of ${fmt(me.vault.cap)} this run</small></p><div class="meter"><i style="width:${pct(me.vault.run, me.vault.cap)}"></i></div><p class="note">Part of each win is saved here. Higher multiplier, bigger share. Huge wins count less, the share drops as the cap fills, and solo tables save half. Today: ${fmt(me.vault.today)} of ${fmt(me.vault.day)}. Spend it in an Own wallet lobby.</p></section>
  <section class="dcard"><h3>Level ${me.lvl}</h3><p class="stat">${nolim ? 'No limit' : fmt(me.limit)}<small>max bet per round</small></p><div class="meter"><i style="width:${pct(me.xp, me.need)}"></i></div><p class="note">${fmt(me.need - me.xp)} XP to level ${me.lvl + 1}.</p></section></div>`;
       return;
     }
@@ -428,33 +428,36 @@ const RH = (() => {
   <p class="note">You earn ${c.rate} Orra per minute, up to ${fmt(c.cap)}.</p>
   <button class="btn go" id="w1" ${c.pending < 1 ? 'disabled' : ''}>${c.pending < 1 ? 'Nothing to collect yet' : 'Collect ' + fmt(c.pending)}</button>
   <button class="btn" id="w2" ${c.work >= 10 || me.bal < c.upCost ? 'disabled' : ''}>${c.work >= 10 ? 'Maximum level' : 'Upgrade to level ' + (c.work + 1) + ' for ' + fmt(c.upCost)}</button></section>
- <section class="dcard"><h3>Daily bonus</h3><p class="stat">${ORRA}${fmt(c.gift)}</p><p class="note">${c.today ? `Collected. Streak: day ${c.day}. Come back tomorrow for more.` : `Streak day ${c.day}. Each day in a row adds 25, up to day 7.`}</p>
+ <section class="dcard"><h3>Daily bonus</h3><p class="stat">${ORRA}${fmt(c.gift)}</p><p class="note">${c.today ? `Collected. Streak day ${c.day}. Next one tomorrow.` : `Streak day ${c.day}. +25 per day in a row, up to day 7.`}</p>
   <button class="btn go" id="w3" ${c.today ? 'disabled' : ''}>${c.today ? 'Collected today' : 'Collect ' + fmt(c.gift)}</button></section>
  <section class="dcard"><h3>Level ${me.lvl}</h3><p class="stat">${nolim ? 'No limit' : fmt(me.limit)}<small>max bet per round</small></p><div class="meter"><i style="width:${pct(me.xp, me.need)}"></i></div>
   <p class="note">${fmt(me.need - me.xp)} XP to level ${me.lvl + 1}. Every 5 Orra you bet gives 1 XP.</p></section>
  <section class="dcard"><h3>Inventory</h3><div class="inv"><div><b>${me.items.shield || 0}</b><small>Shield</small></div><div><b>${me.items.swap || 0}</b><small>Swap token</small></div></div>
-  <p class="note">A Shield blocks the next attack on you in any bonus game. Swap tokens force a rival to switch sides.</p></section></div>`;
+  <p class="note">Shield: blocks the next attack on you. Swap token: forces a rival to switch sides.</p></section></div>`;
     $('w1').onclick = () => { send({ t: 'cashier', op: 'collect' }); sfx('token_place'); };
     $('w2').onclick = () => send({ t: 'cashier', op: 'upgrade' });
     $('w3').onclick = () => { send({ t: 'cashier', op: 'daily' }); sfx('token_place'); fanfare(); };
   }
   function rulesDialog() {
-    let h = `<section class="rsec"><h3>The table</h3><ul>
-<li>Every round you have ${S && S.cfg ? S.cfg.bet : 8} seconds to bet. When everyone presses Ready, the wheel spins at once.</li>
-<li>Pick a chip, then click a field. Click again to stack more. Right-click a field to remove your bet.</li>
-<li>The chip stack badge between each group of 4 tickets bets your chip on all 4 at once. Click it again to stack more.</li>
-<li>Your balance is in Orra ${ORRA}. Your level sets the maximum bet per round.</li>
-<li>Prime Minute: each round one field gets a x2, x3 or x5 boost on its winnings.</li></ul>
+    let h = `<section class="rsec"><h3>The table</h3><ul class="brules">
+<li><b>Bet:</b> pick a chip, click a field. Click again to add more. Right-click removes your bet.</li>
+<li><b>Group:</b> the chip stack between each group of 4 bets your chip on all 4.</li>
+<li><b>Time:</b> ${S && S.cfg ? S.cfg.bet : 8} seconds per round. The wheel spins early once everyone presses Ready.</li>
+<li><b>Limit:</b> your level sets the max bet per round.</li>
+<li><b>Prime Minute:</b> 1 field per round pays x2, x3 or x5.</li>
+<li><b>Crowd:</b> fields backed by more players, or with more Orra on them, land slightly less often (up to ${Math.round(RHS.CROWD_MAX * 100)}% less).</li></ul>
 <div class="pays">${KEYS.map(k => { const t = TYPES[k]; return `<div style="--c:${SKIN[k].f}">${t.n}<small>${t.pay ? 'pays ' + t.pay + ' : 1' : 'Bonus game'}</small></div>`; }).join('')}</div></section>
-<section class="rsec"><h3>Bonus games</h3><ul>
-<li>Backers (players who bet on the field before the spin) always play, with the full edge: full multiplier, Prime Minute boost, the first turns and an Edge Shield against late joiners.</li>
-<li>Everyone else gets a short buy-in window. You can buy in for up to 25% to 50% of the top backer's stake (more when more of the table backed it). Late joiners collect 60% of their multiplier.</li>
-<li>A bonus pays the multiplier you finish with, plus your bet back.</li>
-<li>Shields and Swap tokens you win stay with you between games.</li></ul></section>`;
-    for (const k of BONUS_KEYS) h += `<section class="rsec" style="--accent:${ACCENT[k]}"><h3><span class="cat">${CAT_NAMES[k]}</span></h3><p class="note">One of these 4 is picked at random.</p><div class="gl">${(catalog[k] || []).map(g => `<details><summary>${esc(g.name)}</summary><ul>${g.rules.map(r => `<li>${esc(r)}</li>`).join('')}</ul></details>`).join('')}</div></section>`;
+<section class="rsec"><h3>Bonus games</h3><ul class="brules">
+<li><b>Backers</b> (bet on the field) always play: full multiplier, Prime Minute boost, first turn, and an Edge Shield against late joiners.</li>
+<li><b>Late buy-in:</b> everyone else can join for 25% to 50% of the top backer's stake. Late joiners get 60% of their multiplier.</li>
+<li><b>Payout:</b> your final multiplier times your stake, plus your stake back.</li>
+<li><b>Items:</b> Shields and Swap tokens carry over between games.</li></ul></section>`;
+    for (const k of BONUS_KEYS) h += `<section class="rsec" style="--accent:${ACCENT[k]}"><h3><span class="cat">${CAT_NAMES[k]}</span></h3><p class="note">1 of these 4, picked at random.</p><div class="gl">${(catalog[k] || []).map(g => `<details><summary>${esc(g.name)}</summary><ul class="brules">${g.rules.map(ruleLi).join('')}</ul></details>`).join('')}</div></section>`;
     h += '<p class="note">Orra is play money with no real value.</p>';
     $('rulebody').innerHTML = h;
   }
+  // 'Label: text' renders the label in bold so rules scan fast.
+  function ruleLi(r) { const m = /^([^:]{1,18}): (.*)$/.exec(r); return m ? `<li><b>${esc(m[1])}:</b> ${esc(m[2])}</li>` : `<li>${esc(r)}</li>`; }
   function toast(t, ms = 3200, kind = '') { const e = $('toast'); e.textContent = t; e.className = 'on ' + kind; clearTimeout(toast.t); toast.t = setTimeout(() => e.classList.remove('on'), ms); }
   const say = t => { const e = $('say'); if (e.textContent === t) return; e.textContent = t; e.classList.remove('pop'); void e.offsetWidth; e.classList.add('pop'); };
 
@@ -530,7 +533,7 @@ const RH = (() => {
   const Bonus = (() => {
     let cur = null, inst = null, last = null, logKey = '', span = { ends: 0, tot: 1 };
     const box = () => $('box');
-    const rulesList = rules => `<ol class="brules">${rules.map(r => `<li>${esc(r)}</li>`).join('')}</ol>`;
+    const rulesList = rules => `<ul class="brules">${rules.map(ruleLi).join('')}</ul>`;
     const accent = cat => box().style.setProperty('--accent', ACCENT[cat] || 'var(--gold)');
     // Intro doubles as the buy-in window. Built once per round, then patched so the slider keeps its value.
     let introKey = '';
@@ -547,10 +550,10 @@ const RH = (() => {
         if (n.cap) {
           const bx = box().querySelector('.buyin'), start = Math.min(n.cap, Math.max(5, Math.round(n.cap / 2 / 5) * 5));
           bx.hidden = false;
-          bx.innerHTML = `<p class="bihead">Buy in late, up to <b>${orra(n.cap)}</b> <small>(${Math.round(n.share * 100)}% of the top stake ${orra(n.top)})</small></p>
+          bx.innerHTML = `<p class="bihead">Buy in, max <b>${orra(n.cap)}</b> <small>(${Math.round(n.share * 100)}% of top stake ${orra(n.top)})</small></p>
             <div class="birow"><input type="range" id="biamt" min="5" max="${n.cap}" step="5" value="${start}" aria-label="Buy-in amount"><b id="bival">${orra(start)}</b></div>
             <div class="birow"><button class="btn go" id="bigo">Buy in</button><button class="btn" id="bipass">Watch</button></div>
-            <p class="note">Late entry: ${Math.round(n.latePay * 100)}% of your multiplier, no Prime Minute boost, you move after the backers and their Edge Shields block your first attack.</p>`;
+            <p class="note">Late: ${Math.round(n.latePay * 100)}% of your multiplier, no Prime Minute, you go after backers, their Edge Shields block your first attack.</p>`;
           const r = $('biamt');
           r.oninput = () => { $('bival').innerHTML = orra(+r.value); tone(520 + +r.value / n.cap * 300, .03, .02); };
           $('bigo').onclick = () => { send({ t: 'buyin', amt: +r.value }); sfx('token_place'); };
@@ -561,7 +564,7 @@ const RH = (() => {
       if (bx && !n.cap) bx.hidden = true;
       const badge = box().querySelector('.badge');
       badge.className = 'badge ' + (backer ? 'in' : late ? 'in late' : 'watch');
-      badge.textContent = backer ? 'You backed this field. Full edge.' : late ? 'You bought in late. Get ready.' : n.cap ? 'You did not back this field' : 'Spectating';
+      badge.textContent = backer ? 'Backer: full edge' : late ? 'Bought in late' : n.cap ? 'Not backed: buy in or watch' : 'Spectating';
       box().querySelector('.bplayers').innerHTML = m.players.filter(p => p.bets[n.cat]).sort((a, b) => n.late.includes(a.id) - n.late.includes(b.id) || b.bets[n.cat] - a.bets[n.cat])
         .map(p => `<span class="bp ${p.id === m.you ? 'me' : ''}" style="--c:${p.color}"><i></i>${esc(p.name)}<small>${ORRA}${fmt(p.bets[n.cat])}</small><span class="tag ${n.late.includes(p.id) ? '' : 'ok'}">${n.late.includes(p.id) ? 'Late' : 'Backer'}</span></span>`).join('');
     }

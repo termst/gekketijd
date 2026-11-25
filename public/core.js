@@ -170,11 +170,13 @@ class Room {
     this.after(dur, () => this.landed());
     this.broadcast();
   }
-  // Genuinely random, with a small boost to bonus fields that grows after each 1 or 3.
+  // Random, with two small leans:
+  //   dry:   bonus fields get up to +40% weight after a run of 1s and 2s
+  //   crowd: fields many players backed, or with a big share of the Orra, get up to 24% less (RHS.crowdWeights)
   pickIndex() {
     if (this.force) { const i = DIAL.indexOf(this.force.key); if (i >= 0) return i; }
-    const lean = 1 + Math.min(0.4, 0.05 * this.dry);
-    const w = DIAL.map(k => BONUS_KEYS.includes(k) ? lean : 1), sum = w.reduce((a, b) => a + b, 0);
+    const lean = 1 + Math.min(0.4, 0.05 * this.dry), crowd = RHS.crowdWeights(this.stakes);
+    const w = DIAL.map(k => (BONUS_KEYS.includes(k) ? lean : 1) * crowd[k]), sum = w.reduce((a, b) => a + b, 0);
     let r = Math.random() * sum;
     for (let i = 0; i < w.length; i++) { r -= w[i]; if (r < 0) return i; }
     return w.length - 1;

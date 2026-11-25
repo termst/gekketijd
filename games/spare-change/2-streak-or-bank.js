@@ -4,10 +4,10 @@ const MAX_CALLS = 8, TURN_MS = 9000;
 module.exports = {
   id: 'streak', cat: 'spare', name: 'Streak or Bank',
   rules: [
-    'Players take turns calling a coin flip. Each correct call adds +1x to your streak. A wrong call wipes the streak.',
-    'Bank at any time to lock your streak in and leave. You have 8 calls; whatever is left on the last call is banked for you.',
-    'When you bank you can pass the coin: that rival must make 1 extra call before they are allowed to bank.',
-    'Reaching a 5 streak grants a Shield that blocks the next attack on you.'
+    'Call: on your turn, call Red or Blue. Right: streak +1x. Wrong: streak back to 0.',
+    'Bank: lock in your streak and stop. After 8 calls it banks itself.',
+    'Pass: when you bank, you can force a rival to make 1 extra call before they may bank.',
+    'Shield: every 5 streak earns one.'
   ],
   create(ctx) {
     const order = ctx.shuffle(ctx.ids.slice()), S = {};

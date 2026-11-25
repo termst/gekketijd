@@ -17,19 +17,19 @@
       const act = el.querySelector('#fd-act'), note = el.querySelector('#fd-note');
       act.innerHTML = '';
       if (v.phase === 'draft') {
-        note.textContent = `Draft order (lowest balance first): ${v.order.map(api.name).join(', ')}. ${v.turn ? api.name(v.turn) + ' is picking.' : ''}`;
+        note.textContent = `Order: ${v.order.map(api.name).join(', ')}.${v.turn ? ' ' + api.name(v.turn) + ' picks.' : ''}`;
         if (v.turn === api.me) {
           act.innerHTML = v.names.map((n, k) => `<button class="btn" data-k="${k}" style="box-shadow:inset 0 0 0 3px ${FCOL[k]}">${n}<small class="note">${Object.keys(v.pick).filter(id => v.pick[id] === k).length} on it</small></button>`).join('');
           act.querySelectorAll('[data-k]').forEach(b => b.onclick = () => api.send({ flapper: +b.dataset.k }));
           if (!st.beep) { st.beep = 1; tone(700, .2); }
         }
       } else if (v.phase === 'jam') {
-        note.textContent = 'Play your Jam card: a rival\'s flapper skips 1 segment when the wheel stops.';
+        note.textContent = 'Jam: a rival\'s flapper reads 1 segment further.';
         if (api.part && !v.jamUsed) {
           act.innerHTML = api.players.filter(p => p.id !== api.me).map(p => `<button class="btn" data-j="${p.id}"><span class="pdot" style="--c:${p.color}"></span>Jam ${esc(p.name)} (${v.names[v.pick[p.id]]})</button>`).join('') + '<button class="btn" data-pass="1">Keep it</button>';
           act.querySelectorAll('button').forEach(b => b.onclick = () => api.send(b.dataset.pass ? { pass: true } : { jam: b.dataset.j }));
         }
-      } else note.textContent = v.phase === 'spin' ? 'Spinning...' : 'Done. Shared flappers split, solo flappers get +50%.';
+      } else note.textContent = v.phase === 'spin' ? 'Spinning...' : 'Done. Shared split, alone +50%.';
       el.querySelector('#fd-vals').innerHTML = v.names.map((n, k) => {
         const who = Object.keys(v.pick).filter(id => v.pick[id] === k);
         return `<span class="bp" style="--c:${FCOL[k]}"><i></i>${n}: ${who.map(api.name).join(', ') || 'empty'}${v.jammed && v.jammed[k] ? ` JAM +${v.jammed[k]}` : ''}${v.factor[k] > 1 ? ' x' + v.factor[k] : ''} ${v.value[k] !== null ? '= ' + v.value[k] + 'x' : ''}</span>`;
@@ -53,7 +53,7 @@
     },
     update(el, st, v, api) {
       st.v = v;
-      el.querySelector('#pt-note').textContent = v.phase === 'paint' ? `Click segments to paint them. You have ${v.points[api.me] || 0} of ${v.budget} points left. A free segment costs 1, a rival's costs 2.` : v.phase === 'spin' ? `Scoring spin ${Math.min(3, v.scored + 1)} of 3${v.mul > 1 ? ', wheel at x' + v.mul : ''}` : 'Done.';
+      el.querySelector('#pt-note').textContent = v.phase === 'paint' ? `Click to paint. Points: ${v.points[api.me] || 0}/${v.budget}. Free 1, rival's 2.` : v.phase === 'spin' ? `Spin ${Math.min(3, v.scored + 1)}/3${v.mul > 1 ? ', x' + v.mul : ''}` : 'Done.';
       el.querySelector('#pt-act').innerHTML = api.players.map(p => `<span class="bp" style="--c:${p.color}"><i></i>${esc(p.name)} ${v.owner.filter(o => o === p.id).length} segs, ${fx2(v.res[p.id])}x</span>`).join('');
     },
     frame(el, st, _, api) {
@@ -74,14 +74,14 @@
       act.innerHTML = '';
       if (v.phase === 'decide' && api.part) {
         if (inn) {
-          act.innerHTML = `<button class="btn go ${mine.choice === 'stay' ? 'sel' : ''}" data-c="stay">Stay for the next spin</button><button class="btn ${mine.choice === 'cash' ? 'sel' : ''}" data-c="cash">Cash out ${fx2(v.r[api.me])}x</button><label class="note chk"><input type="checkbox" id="pl-cu" ${mine.curse ? 'checked' : ''}> Also buy a Curse (25%)</label>`;
+          act.innerHTML = `<button class="btn go ${mine.choice === 'stay' ? 'sel' : ''}" data-c="stay">Stay</button><button class="btn ${mine.choice === 'cash' ? 'sel' : ''}" data-c="cash">Cash out ${fx2(v.r[api.me])}x</button><label class="note chk"><input type="checkbox" id="pl-cu" ${mine.curse ? 'checked' : ''}> + Curse (25%)</label>`;
           act.querySelectorAll('[data-c]').forEach(b => b.onclick = () => api.send({ choice: b.dataset.c, curse: el.querySelector('#pl-cu').checked }));
         } else if (v.r[api.me] > 0) {
-          act.innerHTML = `<button class="btn ${mine.curse ? 'sel' : ''}" id="pl-curse">${mine.curse ? 'Curse bought (undo)' : 'Buy a Curse card for 25%: +1 BUST'}</button>`;
+          act.innerHTML = `<button class="btn ${mine.curse ? 'sel' : ''}" id="pl-curse">${mine.curse ? 'Curse bought (undo)' : 'Curse: pay 25%, +1 BUST'}</button>`;
           el.querySelector('#pl-curse').onclick = () => api.send({ curse: !mine.curse });
         }
       }
-      el.querySelector('#pl-note').textContent = v.phase === 'decide' ? `Spin ${v.n} of ${v.max} done. Decide secretly: ${v.decided.map(api.name).join(', ') || 'nobody decided yet'}.` : v.phase === 'done' ? (v.bust ? 'BUST.' : 'Done.') : `Spin ${v.n} of ${v.max}. ${v.segs.filter(s => s === 'BUST').length} BUST on the wheel.`;
+      el.querySelector('#pl-note').textContent = v.phase === 'decide' ? `Spin ${v.n}/${v.max}. Stay or cash out. Decided: ${v.decided.map(api.name).join(', ') || 'nobody'}.` : v.phase === 'done' ? (v.bust ? 'BUST.' : 'Done.') : `Spin ${v.n}/${v.max}. BUST segments: ${v.segs.filter(s => s === 'BUST').length}.`;
       el.querySelector('#pl-t').innerHTML = '<tr><th>Player</th><th>Result</th><th>Status</th></tr>' + api.players.map(p => `<tr class="${p.id === api.me ? 'me' : ''}"><td><span class="pdot" style="--c:${p.color}"></span>${esc(p.name)}</td><td class="n">${fx2(v.r[p.id])}x</td><td>${v.inn[p.id] ? 'still in' : 'cashed out'}</td></tr>`).join('');
     },
     frame(el, st) {
@@ -102,7 +102,7 @@
     update(el, st, v, api) {
       st.v = v; if (!st.w) st.w = { a: v.a, w: 0, t: now() };
       el.querySelector('#bb-b').hidden = !api.part || !!v.pressed[api.me] || v.phase === 'done';
-      el.querySelector('#bb-note').textContent = v.phase === 'lead' ? `Wheel starts in ${secs(v.t0)}. One brake press each. Last press decides, but the wheel also stops on its own.` : v.phase === 'live' ? `Pressed: ${Object.keys(v.pressed).map(api.name).join(', ') || 'nobody'}` : (v.stopBy ? `${api.name(v.stopBy)}'s brake stopped it.` : 'It stopped on its own.');
+      el.querySelector('#bb-note').textContent = v.phase === 'lead' ? `Start in ${secs(v.t0)}. 1 brake each.` : v.phase === 'live' ? `Pressed: ${Object.keys(v.pressed).map(api.name).join(', ') || 'nobody'}` : (v.stopBy ? `Stopped by ${api.name(v.stopBy)}.` : 'It stopped on its own.');
       el.querySelector('#bb-act').innerHTML = api.players.map(p => `<span class="bp" style="--c:${p.color}"><i></i>${esc(p.name)}${v.pressed[p.id] ? ' braked' : ''}${v.result ? ': ' + v.result[p.id] + 'x' : ''}</span>`).join('');
       if (v.phase === 'done') { removeEventListener('keydown', st.key); st.w = { a: v.a, w: 0, t: now() }; }
     },
