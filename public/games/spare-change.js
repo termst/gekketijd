@@ -87,9 +87,9 @@
         for (const s of ['red', 'blue']) { const sx = v.spot[s] * W; x.fillStyle = s === 'red' ? '#c8323c' : '#2f6fd0'; x.fillRect(sx - 30, 18, 60, 24); x.fillStyle = '#fff'; x.fillRect(sx - 1, 14, 2, 32); }
         let p = null;
         if (t >= v.t0 && v.phase === 'live') { const q = (((t - v.t0) % v.period) + v.period) % v.period / v.period; p = q < .5 ? q * 2 : 2 - q * 2; }
-        if (t < v.t0) { x.fillStyle = '#fff'; x.font = '700 20px ' + RH.FONT; x.textAlign = 'center'; x.fillText(Math.ceil((v.t0 - t) / 1000), W / 2, 37); }
+        if (t < v.t0) { x.fillStyle = '#fff'; RH.heft(x, 20, 3); x.textAlign = 'center'; RH.htext(x, Math.ceil((v.t0 - t) / 1000), W / 2, 37); }
         if (p !== null && !(d.stops.red && d.stops.blue)) { x.fillStyle = '#ffe58a'; x.fillRect(p * W - 3, 8, 6, 44); }
-        for (const s of ['red', 'blue']) { const k = d.stops[s]; if (k && k.p >= 0) { x.fillStyle = s === 'red' ? '#ff8a8a' : '#8ab8ff'; x.beginPath(); x.moveTo(k.p * W, 16); x.lineTo(k.p * W - 8, 2); x.lineTo(k.p * W + 8, 2); x.fill(); x.fillStyle = '#fff'; x.font = '700 12px ' + RH.FONT; x.textAlign = 'center'; x.fillText(fx2(k.m) + 'x', k.p * W, 56); } }
+        for (const s of ['red', 'blue']) { const k = d.stops[s]; if (k && k.p >= 0) { x.fillStyle = s === 'red' ? '#ff8a8a' : '#8ab8ff'; x.beginPath(); x.moveTo(k.p * W, 16); x.lineTo(k.p * W - 8, 2); x.lineTo(k.p * W + 8, 2); x.fill(); x.fillStyle = '#fff'; RH.heft(x, 12, 2); x.textAlign = 'center'; RH.htext(x, fx2(k.m) + 'x', k.p * W, 56); } }
       });
     }
   };

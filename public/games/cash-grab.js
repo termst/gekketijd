@@ -102,7 +102,7 @@
       if (!st.v) return; v = st.v;
       const c = el.querySelector('#rc-c'); if (!c) return; const x = c.getContext('2d');
       x.clearRect(0, 0, 600, 800); x.fillStyle = '#0b2a1e'; x.fillRect(0, 0, 600, 800); x.strokeStyle = '#e6c673'; x.lineWidth = 4; x.strokeRect(2, 2, 596, 820);
-      for (const t of v.targets) { if (t.gone) continue; x.beginPath(); x.arc(t.x, t.y, RHS.TR, 0, RH.TAU); x.fillStyle = COL[t.c]; x.fill(); x.lineWidth = 3; x.strokeStyle = '#fff8'; x.stroke(); x.fillStyle = '#fff'; x.font = '700 15px ' + RH.FONT; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(t.v, t.x, t.y + 1); }
+      for (const t of v.targets) { if (t.gone) continue; x.beginPath(); x.arc(t.x, t.y, RHS.TR, 0, RH.TAU); x.fillStyle = COL[t.c]; x.fill(); x.lineWidth = 3; x.strokeStyle = '#fff8'; x.stroke(); x.fillStyle = '#fff'; RH.heft(x, 15, 2.5); x.textAlign = 'center'; x.textBaseline = 'middle'; RH.htext(x, t.v, t.x, t.y + 1); }
       if (v.phase === 'aim') {
         for (const p of api.players) {
           const mine = p.id === api.me, a = mine && st.live ? st.aim : v.aim[p.id];
@@ -120,7 +120,7 @@
         for (let k = 1; k < pts.length && left > 0; k++) { const f = Math.min(1, left / seg[k - 1]); bx = pts[k - 1][0] + (pts[k][0] - pts[k - 1][0]) * f; by = pts[k - 1][1] + (pts[k][1] - pts[k - 1][1]) * f; x.lineTo(bx, by); left -= seg[k - 1]; }
         x.globalAlpha = i === v.shots.length - 1 ? 1 : .3; x.stroke(); x.globalAlpha = 1;
         if (p < 1) { x.beginPath(); x.arc(bx, by, 7, 0, RH.TAU); x.fillStyle = '#fff'; x.fill(); }
-        else if (i === v.shots.length - 1) { x.fillStyle = '#fff'; x.font = '700 26px ' + RH.FONT; x.textAlign = 'center'; x.fillText(`${api.name(s.id)}: ${s.best}x${s.combo ? ' COMBO' : ''}`, 300, 680); }
+        else if (i === v.shots.length - 1) { x.fillStyle = '#fff'; RH.heft(x, 26, 2.5); x.textAlign = 'center'; RH.htext(x, `${api.name(s.id)}: ${s.best}x${s.combo ? ' COMBO' : ''}`, 300, 680); }
       });
       x.fillStyle = '#e6c673'; x.beginPath(); x.arc(RHS.GUN.x, RHS.GUN.y, 16, 0, RH.TAU); x.fill();
     }
