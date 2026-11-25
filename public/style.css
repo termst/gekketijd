@@ -63,7 +63,8 @@ header .logo img{height:42px;width:auto}
 .life>div{display:grid;justify-items:center;gap:1px;min-width:104px;padding:5px 12px 4px;border-radius:var(--r);background:#0006;box-shadow:inset 0 0 0 1px var(--line2)}
 .life small{font-size:11px;--track:1.5px;text-transform:uppercase;color:var(--mute)}
 .life b{display:inline-flex;align-items:center;gap:5px;font-size:18px;--heft:3;font-variant-numeric:tabular-nums}
-.life .won b{color:var(--good)}.life .lost b{color:var(--bad)}
+.life .won b{color:var(--good)}.life .lost b{color:var(--bad)}.life .wallet b{color:var(--gold)}
+.life .wallet{box-shadow:inset 0 0 0 1px var(--copper)}
 .view{display:grid;gap:clamp(8px,1.6vh,13px)}
 .hint{font-size:12px;color:var(--mute);margin-top:5px}
 /* Lobby setup */
@@ -125,6 +126,13 @@ header{display:flex;justify-content:space-between;align-items:center;gap:10px;pa
 .lvlchip{display:grid;gap:3px;min-width:92px;padding:0 4px}
 .lvlchip b{font-size:13px;--heft:2;color:var(--gold);display:flex;justify-content:space-between;gap:8px}
 .lvlchip b small{color:var(--mute);--heft:1}
+.walchip{display:grid;justify-items:start;gap:0;padding:2px 10px;min-height:36px;align-content:center;background:#0008;border-radius:var(--r);box-shadow:inset 0 0 0 1px var(--copper)}
+.walchip small{font-size:10px;--track:1.5px;text-transform:uppercase;color:var(--mute);line-height:1.1}
+.walchip b{display:inline-flex;align-items:center;gap:4px;font-size:15px;--heft:2.5;color:var(--gold);font-variant-numeric:tabular-nums;line-height:1.1}
+.walchip b .orra{width:14px;height:14px}
+.walchip.up{animation:walup .9s var(--ease)}
+@keyframes walup{30%{box-shadow:inset 0 0 0 2px var(--good),0 0 14px #3ac46e88}}
+#snd.low{opacity:.85}
 .meter{height:5px;background:#0009;border-radius:0.75px;overflow:hidden}
 .meter i{display:block;height:100%;background:var(--metal);border-radius:0.75px;transition:width .5s var(--ease)}
 
@@ -361,6 +369,15 @@ canvas.gc{max-width:100%;display:block;margin:auto;touch-action:none;border-radi
 .intro .brules{background:#0006;border-radius:var(--r);padding:12px 16px 12px 34px;font-size:15px;width:min(640px,100%)}
 .intro .bt{width:min(420px,90%)}
 .intro .bt i{animation:fill var(--dur,2.8s) linear forwards}
+.intro{overflow-y:auto;min-height:0;overscroll-behavior:contain}
+.intro .bplayers{margin:2px 0 0}
+.bwait{min-height:1.3em;color:var(--mute);font-size:15px;margin:0}
+.iacts{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.iacts .btn{min-width:150px}
+.iacts .btn.done{opacity:1;background:#1f6b44;color:#e6ffef;box-shadow:inset 0 0 0 1px #3ac46e}
+.tag.rd{background:#0009;color:var(--mute);animation:rdpulse 1.6s ease-in-out infinite}
+@keyframes rdpulse{50%{opacity:.45}}
+@media (prefers-reduced-motion:reduce){.tag.rd{animation:none}}
 @keyframes fill{from{width:100%}to{width:0}}
 
 /* Results */

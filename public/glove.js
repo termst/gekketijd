@@ -137,11 +137,18 @@ const Glove = (() => {
   const SEL = {
     table: '#table', header: 'header', say: '#say', clock: '#clock', hist: '#hist span', people: '#people .pl', tickets: '.house', lit: '.house.lit', hit: '.house.hit',
     coins: '.coin', go: '#go', win: '#win', bal: '#bal', buttons: 'header .btn, #quay .btn', medal: '.medal', box: '#bonus.on #box', stage: '#stage',
+    wallet: '#walchip', urge: '#bonus.on #bready:not([hidden]):not(:disabled), #bonus.on #bigo',
   };
   function visRect(e) { const r = e.getBoundingClientRect(); return r.width > 4 && r.height > 4 && r.bottom > 0 && r.right > 0 && r.top < Hh && r.left < W && (e.offsetParent !== null || getComputedStyle(e).position === 'fixed') ? r : null; }
   function pickEl(name) { const list = [...document.querySelectorAll(SEL[name] || name)].map(e => visRect(e)).filter(Boolean); return list.length ? any(list) : null; }
   const wheel = () => { try { return A && A.wheel ? A.wheel() : null; } catch { return null; } };
   const overlayOn = () => !!$('#bonus.on');
+  // Pointer: the glove makes room for the cursor, sometimes watches it, and can be poked or high-fived.
+  // Touch only pokes (no hover on touch screens). hand: screen centre and radius of the hand as last drawn.
+  const ptr = { x: -1e4, y: -1e4, t: -1e9, mouse: false }, hand = { x: -1e4, y: -1e4, r: 0, on: false };
+  const ptrFresh = (ms = 3000) => ptr.mouse && now() - ptr.t < ms && ptr.x >= 0 && ptr.y >= 0 && ptr.x <= W && ptr.y <= Hh;
+  const shy = { x: 0, y: 0 };
+  let pokes = [], five = null;
 
   // ---------------------------------------------------------------- Anti repetition
   // Weighted pick that punishes recent picks hard and frequent picks softly.
@@ -409,6 +416,11 @@ const Glove = (() => {
     const cuffFirst = P3([0, .25, 0])[2] - .06 < P3([0, -.5, 0])[2];
     back.sort((a, b) => a.k - b.k); front.sort((a, b) => a.k - b.k);
     const pad = lw * 2 + 3; x0 = Math.floor(x0 - pad); y0 = Math.floor(y0 - pad); x1 = Math.ceil(x1 + pad); y1 = Math.ceil(y1 + pad);
+    hand.x = (x0 + x1) / 2; hand.y = (y0 + y1) / 2; hand.r = Math.min(x1 - x0, y1 - y0) * .42;
+    // fully off screen (entrances, exits, offstage repositioning): clear once and skip the work
+    const offS = S0 * 3; hand.on = !(x1 < -offS || y1 < -offS || x0 > W + offS || y0 > Hh + offS);
+    if (!hand.on) { if (!render.off) { g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, cv.width, cv.height); render.off = true; } return; }
+    render.off = false;
     const bw = Math.min(x1 - x0, W * 2), bh = Math.min(y1 - y0, Hh * 2), pw = Math.ceil(bw * dpr), ph = Math.ceil(bh * dpr);
     ensure(Hb, pw, ph); ensure(Cb, pw, ph);
     hb.setTransform(1, 0, 0, 1, 0, 0); hb.clearRect(0, 0, pw + 2, ph + 2); hb.setTransform(dpr, 0, 0, dpr, -x0 * dpr, -y0 * dpr);
@@ -424,12 +436,25 @@ const Glove = (() => {
     g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, cv.width, cv.height);
     const e = clamp((z + 1) / 2.2, 0, 1), sdx = S0 * (.08 + e * .5), sdy = S0 * (.14 + e * .75), blur = .5 + e * e * 20, sa = .78 - e * .3;
     const OFF = cv.width + pw + 50;
+    // cartoon squash and stretch along the motion: up to 16% longer and thinner on fast moves, volume kept
+    const vx = rig.x.v, vy = rig.y.v, spd = hyp(vx, vy), str = CALM ? 0 : clamp((spd - 700) / 9000, 0, .16), va = Math.atan2(vy, vx);
+    const place = (dx, dy) => {
+      g.setTransform(dpr, 0, 0, dpr, dx, dy);
+      if (str > .004) { g.translate(hand.x, hand.y); g.rotate(va); g.scale(1 + str, 1 / (1 + str)); g.rotate(-va); g.translate(-hand.x, -hand.y); }
+    };
+    const blit = () => g.drawImage(Hb, 0, 0, pw, ph, x0, y0, pw / dpr, ph / dpr);
     g.save(); g.shadowColor = `rgba(11,2,7,${sa.toFixed(3)})`; g.shadowBlur = blur * dpr; g.shadowOffsetX = OFF + sdx * dpr; g.shadowOffsetY = sdy * dpr;
-    g.drawImage(Hb, 0, 0, pw, ph, x0 * dpr - OFF, y0 * dpr, pw, ph); g.restore();
+    place(-OFF, 0); blit(); g.restore();
+    // smear: two fading ghosts trail a very fast hand (punches, follow through, lunges)
+    if (!CALM && spd > 1600) {
+      const k = clamp((spd - 1600) / 2600, 0, 1);
+      g.save(); [[.016, .2], [.034, .09]].forEach(([t, a]) => { g.globalAlpha = a * k; place(-vx * t * dpr, -vy * t * dpr); blit(); }); g.restore();
+    }
     const dFar = clamp(-z - .35, 0, 1), dNear = clamp(z - .85, 0, 1), bl = dFar * 3.2 + dNear * 2.4;
     if (HAS_FILTER && (bl > .15 || dFar > 0)) g.filter = `blur(${(bl * dpr).toFixed(2)}px) brightness(${(1 - dFar * .22).toFixed(3)}) saturate(${(1 - dFar * .3).toFixed(3)})`;
-    g.drawImage(Hb, 0, 0, pw, ph, x0 * dpr, y0 * dpr, pw, ph);
+    place(0, 0); blit();
     if (HAS_FILTER) g.filter = 'none';
+    g.setTransform(1, 0, 0, 1, 0, 0);
   }
   // Convex hull (monotone chain) of projected points: the silhouette of the palm slab from any angle.
   function hull(pts) {
@@ -567,6 +592,17 @@ const Glove = (() => {
       for (let i = 0; i < 20; i++) if (i % 4) off.P[i] += nz(t * 1.3, 4 + i) * tr * .12;
     }
     off.roll = roll;
+    // make room: a cursor over or near the hand gently pushes it aside (never while it works the wheel or taps a target),
+    // and the canvas goes see-through while the cursor is right on it, so it never hides what you want to click
+    let tx = 0, ty = 0, cover = false;
+    if (ptrFresh(2500) && hand.on && !rig.lock && !five) {
+      const dx = hand.x - ptr.x, dy = hand.y - ptr.y, d = hyp(dx, dy), R = hand.r + S0 * .8;
+      cover = d < hand.r * .9 && layer !== 'deep';
+      if (d < R && (!cur || cur.pri <= 2)) { const f = E.sine((R - d) / R) * S0 * 1.5 / Math.max(1, d); tx = dx * f; ty = dy * f; }
+    }
+    const kk = 1 - Math.exp(-dt * 7); shy.x += (tx - shy.x) * kk; shy.y += (ty - shy.y) * kk;
+    off.x += shy.x; off.y += shy.y;
+    if (cover !== !!cv.dataset.cover) { cover ? cv.dataset.cover = 1 : delete cv.dataset.cover; cv.style.opacity = cover ? '.42' : ''; }
     // random twitches: more when agitated
     if (!CALM && Math.random() < dt * (.12 + ag * 1.1)) { const i = Math.floor(Math.random() * 5); rig.P[i === 4 ? 18 : i * 4 + 1 + Math.floor(Math.random() * 2)].v += rnd(-7, 7) * (.5 + ag); }
     // speed lines on fast moves
@@ -949,6 +985,36 @@ const Glove = (() => {
       await c.go(rig.x.t, rig.y.t + S0 * 1.3, { dur: 150, path: 'direct', ease: 'in', bank: 0 });
       await c.wait(260);
     },
+    // ---- pointer reactions
+    // Poked: jerk away from the click, shake it off. A third poke in a few seconds earns a scolding.
+    async flinch(c, d = {}) {
+      const px = d.x ?? rig.x.x, py = d.y ?? rig.y.x, ax = rig.x.x - px, ay = rig.y.x - py, dl = hyp(ax, ay) || 1;
+      c.trem(.7); c.pose(any(['splay', 'claw', 'open']), 700); c.depth(clamp(rig.z.t - .35, -.3, .6), 260); c.scale(.9, 600);
+      c.snd('glove-tap', { vol: .7, rate: 1.25 }, px); c.burst(px, py, 'tap', .7, false);
+      await c.go(clamp(rig.x.x + ax / dl * S0 * 1.5, S0, W - S0), clamp(rig.y.x + ay / dl * S0 * 1.5, S0, Hh - S0), { dur: 170, path: 'direct', ease: 'out', k: 520, bank: .5 });
+      c.trem(0); c.scale(1, 200);
+      await rock(c, 2, .2, 85, rig.roll.t); c.pose('relax', 120);
+      if (d.n >= 3) { await (chance(.5) ? R.wag(c, {}) : R.palmNo(c, {})); }
+      else await c.wait(rnd(150, 350));
+      c.soft();
+    },
+    // High five: open palm toward the cursor. Click the hand within 1.8 s to slap it, or leave it hanging.
+    async highFive(c) {
+      if (!ptrFresh(4000)) return R.wave(c);
+      const at = [clamp(ptr.x + sgn() * S0 * rnd(.4, .9), S0 * 1.5, W - S0 * 1.5), clamp(ptr.y - S0 * rnd(.6, 1.2), S0 * 1.5, Hh - S0 * 1.5)];
+      await show(c, { pose: 'open', which: 'mid', ang: -PI / 2 + rnd(-.25, .25), yaw: PI + rnd(-.2, .2), pitch: .15, z: .7, at, speed: 1000 });
+      five = { hit: false, at: now() }; c.hov(.4);
+      await bob(c, 1, -S0 * .15, 120);
+      try { await c.until(() => five && five.hit, 1800); } finally { const hit = five && five.hit; five = null; c.hov(1); c.tok.five = hit; }
+      if (c.tok.five) {
+        c.burst(rig.x.x, rig.y.x - S0 * .6, 'impact', .55, 'glove-slap'); c.depth(.3, 600); c.scale(.92, 600);
+        await c.go(rig.x.t, rig.y.t - S0 * .2, { dur: 120, path: 'direct', k: 600 }); c.scale(1, 160); c.depth(.6, 120);
+        await R.quickThumb(c);
+      } else {
+        c.pose('limp', 50); c.orient(rig.roll.t + sgn() * .3, null, -.2, 30);
+        await c.go(rig.x.t, rig.y.t + S0 * .9, { dur: 900, path: 'direct', ease: 'sine', bank: 0 }); await c.wait(400);
+      }
+    },
     // ---- big win extras
     async conductBow(c) {
       await show(c, { pose: 'open', which: 'mid', ang: -PI / 2, yaw: PI * .9, pitch: -.4, z: .5 });
@@ -1020,7 +1086,7 @@ const Glove = (() => {
       await c.wait(400);
     },
     async inspect(c) {
-      const name = pick('inspect', ['coins', 'tickets', 'hist', 'people', 'go', 'medal', 'say']);
+      const name = pick('inspect', ['coins', 'tickets', 'hist', 'people', 'go', 'medal', 'say', 'wallet']);
       const r = pickEl(name); if (!r) return IDLE.drift(c);
       const [tx, ty] = centerOf(r);
       await pointAt(c, tx, ty, { dist: rnd(2.2, 3.2), speed: 450, z: .25 });
@@ -1099,6 +1165,20 @@ const Glove = (() => {
       }
       c.hov(1); c.breath(1); c.pose('relax', 80); await c.wait(rnd(200, 500));
     },
+    // Follow the cursor with a pointing finger, keeping a respectful distance, sometimes jab at it.
+    async watchCursor(c) {
+      if (!ptrFresh(4000)) return IDLE.drift(c);
+      c.over(false); c.soft(); c.pose('point', 110); const z = rnd(.25, .45), keep = S0 * rnd(2.2, 3), yaw = rnd(-.35, .35), pitch = rnd(-.15, .2);
+      c.orient(null, yaw, pitch, 60); let jab = 0;
+      await c.tween(rnd(2200, 3600), () => {
+        const a = Math.atan2(ptr.y - rig.y.x, ptr.x - rig.x.x), dd = keep * (1 - jab * .35);
+        rig.roll.toA(solveRoll(tipOf('point', 'index'), a, rig.yaw.t, rig.pitch.t), 70);
+        const wr = wristFor(tipOf('point', 'index'), clamp(ptr.x - Math.cos(a) * dd, S0, W - S0), clamp(ptr.y - Math.sin(a) * dd, S0, Hh - S0), rig.roll.t, rig.yaw.t, rig.pitch.t, z);
+        rig.x.t = wr[0]; rig.y.t = wr[1]; rig.z.t = z; jab *= .9;
+        if (chance(.006)) jab = 1;
+      }, E.lin);
+      await c.wait(rnd(150, 400));
+    },
     async weave(c) {
       // over the header, under the table, back over: a figure through the HUD
       c.pose(any(['relax', 'claw', 'open']), 60); c.orient(rnd(-.5, .5), rnd(-.6, .6), 0, 40);
@@ -1110,7 +1190,9 @@ const Glove = (() => {
       await c.goPt('mid', d[0], d[1], { speed: 520, z: .55, path: 's' });
     },
   };
-  const IDLE_W = { stretch: .7, stroll: .8, drift: 1.4, prowl: 1, creep: .8, peek: .9, drum: 1, flex: .8, knock: .5, inspect: 1.1, orbit: .8, loom: .45, shadowbox: .55, count: .35, conduct: 1, twiddle: .9, rest: .8, weave: .9 };
+  IDLE.highFive = c => R.highFive(c);
+  const PTR_IDLE = { watchCursor: 1, highFive: 1 };   // need a live mouse cursor
+  const IDLE_W = { highFive: .3, watchCursor: .9, stretch: .7, stroll: .8, drift: 1.4, prowl: 1, creep: .8, peek: .9, drum: 1, flex: .8, knock: .5, inspect: 1.1, orbit: .8, loom: .45, shadowbox: .55, count: .35, conduct: 1, twiddle: .9, rest: .8, weave: .9 };
   const AGIT = { shadowbox: 2, loom: 1.4, creep: 1.3, knock: 1.2, peek: 1.2 };
   const CALM_IDLE = ['drift', 'twiddle', 'conduct', 'rest', 'stretch'];
 
@@ -1221,6 +1303,17 @@ const Glove = (() => {
       }
       c.soft();
     },
+    // Briefing: a patient nod toward your Ready button, never a hurry
+    async urge(c, r) {
+      const t = pickEl('urge'); if (!t) return ROAM.glide(c, r);
+      const tx = t.left + t.width / 2, ty = t.top + t.height / 2, q = rimPick(r, S0 * .4), from = Math.atan2(ty - q.p[1], tx - q.p[0]);
+      const dist = clamp(hyp(tx - q.p[0], ty - q.p[1]) / S0 - .4, 1.1, 2.6);
+      c.over(true); c.scale(ROAM_SC, 60); c.pose('point', 120); c.aim('index', from, rnd(-.3, .3), rnd(-.1, .2), 90);
+      await rimGo(c, r, 'index', tx - Math.cos(from) * dist * S0, ty - Math.sin(from) * dist * S0, { speed: 450, z: .15, path: 'arc' });
+      await pointAt(c, tx, ty, { from, dist, z: .15, over: true, speed: 500 });
+      await bob(c, 2, S0 * .08, 160, [Math.cos(from), Math.sin(from)]);
+      await c.wait(rnd(900, 1600));
+    },
     // slow lap to the far side of the box, around it, fingers always toward the game
     async lap(c, r) {
       c.over(true); c.scale(ROAM_SC, 60); c.pose(any(['relax', 'splay', 'open']), 50);
@@ -1229,7 +1322,7 @@ const Glove = (() => {
       await c.wait(rnd(200, 600));
     },
   };
-  const ROAM_W = [['glide', 1.4], ['perch', 1], ['hint', .9], ['lap', .7], ['knock', .3]];
+  const ROAM_W = [['glide', 1.4], ['perch', 1], ['hint', .9], ['lap', .7], ['knock', .3], ['urge', 0]];
 
   // ---------------------------------------------------------------- Wheel spin
   const CORNERS = { tl: -.75 * PI, tr: -.25 * PI, br: .25 * PI, bl: .75 * PI };
@@ -1380,7 +1473,7 @@ const Glove = (() => {
     bet: [['nodTap', 1], ['quickThumb', .8], ['rubMoney', 1], ['quickOk', .7], ['coinFlip', .8]],
     refused: [['wag', 1], ['thumbsDown', .8], ['punchHud', 1], ['palmNo', .8], ['tableSlam', .6]],
     ready: [['pointWheel', 1], ['snapPoint', .8], ['quickThumb', .6], ['rubMoney', .5], ['coinFlip', .6]],
-    win: [['thumbsUp', 1], ['fingerGuns', 1], ['pointPlayer', .7], ['ok', .8], ['fistPump', 1], ['patWin', .8], ['peace', .4], ['shaka', .6], ['chefKiss', .4]],
+    win: [['highFive', .5], ['thumbsUp', 1], ['fingerGuns', 1], ['pointPlayer', .7], ['ok', .8], ['fistPump', 1], ['patWin', .8], ['peace', .4], ['shaka', .6], ['chefKiss', .4]],
     bigwin: [['fistPump', 1], ['jazz', 1], ['fingerGuns', .8], ['thumbsUp', .6], ['conductBow', .8], ['patWin', .6], ['chefKiss', .9], ['rockOn', 1]],
     loss: [['thumbsDown', 1], ['wag', 1], ['laughPoint', 1], ['punchWheel', 1], ['punchHud', .8], ['palmNo', .6], ['shrug', .5], ['tableSlam', .9], ['sweep', .9]],
     nobet: [['shrug', 1], ['tapTickets', 1], ['beckon', .8], ['pointHit', .7], ['hurry', .8]],
@@ -1391,9 +1484,12 @@ const Glove = (() => {
     levelUp: [['fistPump', 1], ['thumbsUp', 1], ['countUp', .7], ['jazz', .6], ['rockOn', .8]],
     join: [['wave', 1], ['pointPeople', 1], ['shaka', .8]],
     leave: [['wave', 1], ['thumbsDown', .4], ['shrug', .5]],
+    briefReady: [['quickThumb', 1], ['quickOk', .8], ['peace', .4], ['coinFlip', .4]],
+    briefGo: [['drumroll', 1], ['rubMoney', .7], ['jazz', .5], ['snapPoint', .4]],
+    poked: [['flinch', 1]],
   };
-  const OVER = new Set(['bonusWin', 'bonusLoss', 'bonusWatch', 'landedBonus']);
-  const PRI = { bonusLoss: 5, bonusWin: 5, win: 5, bigwin: 5, loss: 5, nobet: 4, levelUp: 4, landedBonus: 4, refused: 3, ready: 3, round: 2, bet: 2, join: 2, leave: 2, bonusWatch: 4 };
+  const OVER = new Set(['bonusWin', 'bonusLoss', 'bonusWatch', 'landedBonus', 'briefReady', 'briefGo']);
+  const PRI = { briefReady: 3, briefGo: 4, poked: 3, bonusLoss: 5, bonusWin: 5, win: 5, bigwin: 5, loss: 5, nobet: 4, levelUp: 4, landedBonus: 4, refused: 3, ready: 3, round: 2, bet: 2, join: 2, leave: 2, bonusWatch: 4 };
   const MOOD = { win: [-.1, .3], bigwin: [.2, .6], loss: [.35, -.2], bonusLoss: [.45, -.3], refused: [.25, 0], bonusWin: [0, .5] };
   function react(type, d = {}) {
     if (!started || CALM && /punch/.test(type)) return;
@@ -1424,13 +1520,14 @@ const Glove = (() => {
     }
     if (overlayOn()) {
       const r = boxRect();
-      if (r) { const n = pick('roam', ROAM_W); run('roam:' + n, async c => { await ROAM[n](c, r); if (chance(.3)) await c.wait(rnd(300, 900)); }, 0); }
+      if (r) { const n = pick('roam', ROAM_W.map(([k, w]) => [k, k === 'urge' ? (pickEl('urge') && now() - st.lastReact > 7000 ? .6 : 0) : w])); run('roam:' + n, async c => { await ROAM[n](c, r); if (chance(.3)) await c.wait(rnd(300, 900)); }, 0); }
       else run('roam:wait', async c => { c.scale(ROAM_SC, 60); await c.wait(300); }, 0);
       return;
     }
     if (rig.sc.t !== 1) rig.sc.to(1, 60);
     const names = CALM ? CALM_IDLE : Object.keys(IDLE_W);
-    const name = pick('idle', names.map(n => [n, (IDLE_W[n] || 1) * (1 + (AGIT[n] ? (AGIT[n] - 1) * st.agit * 2 : 0))]), 9);
+    const live = ptrFresh(5000);
+    const name = pick('idle', names.map(n => [n, PTR_IDLE[n] && !live ? 0 : (IDLE_W[n] || 1) * (1 + (AGIT[n] ? (AGIT[n] - 1) * st.agit * 2 : 0))]), 9);
     run('idle:' + name, async c => { c.over(false); await IDLE[name](c); if (chance(.35)) await c.wait(rnd(300, 1200)); }, 0);
   }
   function startPrep() {
@@ -1448,6 +1545,18 @@ const Glove = (() => {
     await c.until(() => false, 1500);
   }
 
+  // A press on the hand: completes a high five, otherwise a flinch (3 pokes within 6 s: a scolding).
+  // Busy with something important (wheel, results): only a shiver, the action carries on.
+  function poke(e) {
+    if (!started || !hand.on || layer === 'deep') return;
+    const x = e.clientX, y = e.clientY;
+    if (hyp(x - hand.x, y - hand.y) > hand.r * 1.05) return;
+    if (five) { five.hit = true; return; }
+    const t = now(); pokes = pokes.filter(p => t - p < 6000); if (pokes.length && t - pokes[pokes.length - 1] < 450) return; pokes.push(t);
+    if (cur && cur.pri > 3) { rig.trem.x = Math.max(rig.trem.x, .5); burst(x, y, 'tap', .6, false); return; }
+    st.agit = clamp(st.agit + .12, 0, 1); react('poked', { x, y, n: pokes.length });
+  }
+
   // ---------------------------------------------------------------- Page API
   function resize() {
     W = innerWidth; Hh = innerHeight; dpr = Math.min(2, devicePixelRatio || 1);
@@ -1457,11 +1566,14 @@ const Glove = (() => {
   function init(adapter) {
     if (started) { A = adapter || A; return; }
     A = adapter || {};
-    const mkc = (id, z) => { const c = document.createElement('canvas'); c.id = id; c.setAttribute('aria-hidden', 'true'); c.style.cssText = `position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:${z}`; document.body.appendChild(c); return c; };
+    const mkc = (id, z) => { const c = document.createElement('canvas'); c.id = id; c.setAttribute('aria-hidden', 'true'); c.style.cssText = `position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:${z};transition:opacity .22s ease`; document.body.appendChild(c); return c; };
     cv = mkc('glove', 12); fxc = mkc('glovefx', 14);
     g = cv.getContext('2d'); fg = fxc.getContext('2d'); HAS_FILTER = typeof g.filter === 'string';
     Hb = document.createElement('canvas'); hb = Hb.getContext('2d'); Cb = document.createElement('canvas'); cb = Cb.getContext('2d');
     resize(); addEventListener('resize', resize);
+    addEventListener('pointermove', e => { if (e.pointerType === 'touch') return; ptr.x = e.clientX; ptr.y = e.clientY; ptr.t = now(); ptr.mouse = true; }, { passive: true });
+    document.addEventListener('pointerleave', () => { ptr.t = -1e9; });
+    addEventListener('pointerdown', poke, { passive: true });
     // entrance: drops in from above, presents itself
     rig.x.x = rig.x.t = W * rnd(.3, .7); rig.y.x = rig.y.t = -S0 * 4; rig.z.x = rig.z.t = .6;
     started = true;

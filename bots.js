@@ -9,7 +9,7 @@ const CAT = { minority: 'spare', streak: 'spare', duel: 'spare', weighted: 'spar
 
 function bot(i) {
   const ws = new WebSocket(url);
-  let me = null, round = -1, lastAct = 0, off = 0, lastB = null;
+  let me = null, round = -1, intro = -1, lastAct = 0, off = 0, lastB = null;
   setInterval(() => lastB && play(lastB), 700);
   const send = o => ws.readyState === 1 && ws.send(JSON.stringify(o));
   const act = a => send({ t: 'act', a });
@@ -27,7 +27,11 @@ function bot(i) {
         setTimeout(() => { send({ t: 'bet', key, amt: 5 }); setTimeout(() => send({ t: 'ready' }), 300 + R(1500)); }, 200 + R(800));
       }
     }
-    if (m.t === 'room' && m.phase === 'intro' && m.next && m.next.cap) setTimeout(() => send(Math.random() < 0.6 ? { t: 'buyin', amt: 5 * (1 + R(m.next.cap / 5)) } : { t: 'buyin', pass: true }), 300 + R(2000));
+    // Briefing: undecided bots buy in or watch, backers press Ready after "reading" for a moment
+    if (m.t === 'room' && m.phase === 'intro' && m.next && m.next.wait.includes(m.you) && intro !== m.round) {
+      intro = m.round;
+      setTimeout(() => send(m.next.cap ? (Math.random() < 0.6 ? { t: 'buyin', amt: 5 * (1 + R(m.next.cap / 5)) } : { t: 'buyin', pass: true }) : { t: 'bready' }), 500 + R(2500));
+    }
     if (m.t === 'bonus') { lastB = m.part ? m : null; if (m.part) play(m); }
     if (m.t === 'room' && m.phase !== 'bonus') lastB = null;
   };

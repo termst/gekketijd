@@ -58,7 +58,7 @@ const Sfx = (() => {
     'tick-wood':             { n: 3, v: .55, pj: .03, vj: .08, gap: 400, max: 2 },
     'win':                   { n: 4, v: .7, pj: .02, vj: .06, gap: 1500, max: 1, soft: [.4, 6, 30] },
   };
-  let on = true, ac = null, out = null;
+  let on = true, ac = null, out = null, master = 1;   // master: user volume (1 full, .45 low)
   const buf = {}, pend = {}, bag = {}, lastPick = {}, lastAt = {}, voices = {};
   function ctx() {
     if (!ac) {
@@ -66,7 +66,7 @@ const Sfx = (() => {
       // gentle bus compressor so stacked hits (punch + land + coins) never clip
       const comp = ac.createDynamicsCompressor();
       comp.threshold.value = -10; comp.knee.value = 8; comp.ratio.value = 4; comp.attack.value = .004; comp.release.value = .18;
-      out = ac.createGain(); out.gain.value = .9; out.connect(comp).connect(ac.destination);
+      out = ac.createGain(); out.gain.value = .9 * master; out.connect(comp).connect(ac.destination);
     }
     if (ac.state === 'suspended') ac.resume();
     return ac;
@@ -173,6 +173,8 @@ const Sfx = (() => {
     try { const c = ctx(), o = c.createOscillator(), g = c.createGain(); o.type = 'triangle'; o.frequency.value = f; g.gain.setValueAtTime(v, c.currentTime); g.gain.exponentialRampToValueAtTime(.0001, c.currentTime + dur); o.connect(g).connect(out); o.start(); o.stop(c.currentTime + dur); } catch {}
   }
   function stopAll(ms = 150) { Object.values(voices).forEach(vs => vs.forEach(h => h.stop(ms))); }
-  return { play, tone, preload, warm: g => DEF[g] && warmUp(g), ctx, stopAll, get on() { return on; }, set on(v) { on = !!v; if (!on) stopAll(80); } };
+  // Master volume, ramped so a change mid-sound never clicks.
+  function setVol(v) { master = clamp(+v || 0, 0, 1); if (out) try { const n = ac.currentTime; out.gain.cancelScheduledValues(n); out.gain.setValueAtTime(out.gain.value, n); out.gain.linearRampToValueAtTime(.9 * master, n + .08); } catch {} }
+  return { play, tone, preload, warm: g => DEF[g] && warmUp(g), ctx, stopAll, get on() { return on; }, set on(v) { on = !!v; if (!on) stopAll(80); }, get vol() { return master; }, set vol(v) { setVol(v); } };
 })();
 if (typeof window !== 'undefined') window.Sfx = Sfx;
