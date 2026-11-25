@@ -123,7 +123,7 @@ const Glove = (() => {
 
   // ---------------------------------------------------------------- Page state
   let A = null, cv, g, fxc, fg, Hb, hb, Cb, cb, dpr = 1, W = 1, Hh = 1, S0 = 60, T = 0, lastT = 0, started = false, HAS_FILTER = false;
-  let dirty = null, fxDirty = false, layer = '', lastSk = null, lastPos = [0, 0];
+  let fxDirty = false, layer = '', lastSk = null, lastPos = [0, 0];
   const st = { phase: 'betting', round: -1, endsAt: 0, allReady: false, agit: .25, prepRound: -2, countRound: -2, spinT0: 0, spinA0: 0, spinEnd: 0, spinPlan: null, lastReact: 0, players: 0, overlay: false };
   const $ = s => document.querySelector(s);
   const SEL = {
@@ -367,8 +367,8 @@ const Glove = (() => {
       else { const { A: a, B: b, ra, rb } = it; capPath(hb, a[0], a[1], ra, b[0], b[1], rb); hb.lineWidth = lw * 2; hb.strokeStyle = LINE; hb.stroke(); hb.fillStyle = capFill(hb, a[0], a[1], ra, b[0], b[1], rb); hb.fill(); }
     }
     // composite: clear last frame, shadow, hand
-    g.setTransform(1, 0, 0, 1, 0, 0);
-    if (dirty) g.clearRect(dirty[0], dirty[1], dirty[2], dirty[3]);
+    // full clear: a dirty rect misses pixels when blur, shadow or a resize changes the footprint
+    g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, cv.width, cv.height);
     const e = clamp((z + 1) / 2.2, 0, 1), sdx = S0 * (.08 + e * .5), sdy = S0 * (.14 + e * .75), blur = .5 + e * e * 20, sa = .78 - e * .3;
     const OFF = cv.width + pw + 50;
     g.save(); g.shadowColor = `rgba(11,2,7,${sa.toFixed(3)})`; g.shadowBlur = blur * dpr; g.shadowOffsetX = OFF + sdx * dpr; g.shadowOffsetY = sdy * dpr;
@@ -377,8 +377,6 @@ const Glove = (() => {
     if (HAS_FILTER && (bl > .15 || far > 0)) g.filter = `blur(${(bl * dpr).toFixed(2)}px) brightness(${(1 - far * .22).toFixed(3)}) saturate(${(1 - far * .3).toFixed(3)})`;
     g.drawImage(Hb, 0, 0, pw, ph, x0 * dpr, y0 * dpr, pw, ph);
     if (HAS_FILTER) g.filter = 'none';
-    const sp = blur * 2 + 4;
-    dirty = [Math.floor(x0 * dpr - sp * dpr), Math.floor(y0 * dpr - sp * dpr), Math.ceil(pw + (sdx + sp * 2) * dpr), Math.ceil(ph + (sdy + sp * 2) * dpr)];
   }
   function drawPalm(c, slices, backView, lw) {
     const near = slices[slices.length - 1];
@@ -419,14 +417,17 @@ const Glove = (() => {
   }
 
   // ---------------------------------------------------------------- Layers: weave between HUD layers by depth
-  // deep: behind the wheel and the HUD. mid: over the wheel, under the HUD. front: over everything (under the bonus overlay unless `over`).
+  // deep: behind the wheel and the HUD. mid: over the wheel, under the HUD. front: over everything.
+  // While a bonus game is open the glove always sits over its overlay: under it, the overlay's backdrop blur
+  // samples stale canvas frames in Chromium and leaves ghost trails of the hand.
   function setLayer() {
+    if (overlayOn()) { if (layer !== 'over') { layer = 'over'; cv.style.zIndex = 12; cv.dataset.layer = 'over'; } return; }
     const z = rig.z.x, h = .05, b1 = -.42, b2 = .02;
-    let L = layer || 'front';
+    let L = layer === 'over' ? 'front' : layer || 'front';
     if (L === 'deep') { if (z > b1 + h) L = z > b2 + h ? 'front' : 'mid'; }
     else if (L === 'mid') { if (z < b1 - h) L = 'deep'; else if (z > b2 + h) L = 'front'; }
     else if (z < b2 - h) L = z < b1 - h ? 'deep' : 'mid';
-    const zi = L === 'deep' ? -1 : L === 'mid' ? 3 : overlayOn() && !rig.over ? 8 : 12;
+    const zi = L === 'deep' ? -1 : L === 'mid' ? 3 : 12;
     if (L + zi !== layer + cv.style.zIndex) { layer = L; cv.style.zIndex = zi; cv.dataset.layer = L; }
   }
 
@@ -895,23 +896,122 @@ const Glove = (() => {
   const AGIT = { shadowbox: 2, loom: 1.4, creep: 1.3, knock: 1.2, peek: 1.2 };
   const CALM_IDLE = ['drift', 'twiddle', 'conduct', 'rest'];
 
-  // Lurking while a bonus game runs: behind the overlay, rarely over its edge.
-  const LURK = {
-    async deep(c) { c.over(false); c.pose(any(['claw', 'limp', 'relax']), 40); c.orient(rnd(-.8, .8), rnd(-1, 1), rnd(-.3, .3), 20); const p = freshSpot(anySpot); await c.goPt('mid', p[0], p[1], { speed: rnd(120, 220), z: rnd(-.9, -.5), path: pathPick(1) }); await c.wait(rnd(500, 1500)); },
-    async edge(c) {
-      c.over(true); c.pose(any(['claw', 'splay', 'relax']), 60);
-      const side = Math.floor(rnd(0, 4)), along = rnd(.15, .85), ang = [PI / 2, PI, -PI / 2, 0][side];
-      const edge = [[along * W, -S0 * .2], [W + S0 * .2, along * Hh], [along * W, Hh + S0 * .2], [-S0 * .2, along * Hh]][side];
-      c.aim('tips', ang, rnd(-.3, .3), 0, 40);
-      const inP = [edge[0] + Math.cos(ang) * S0 * .9, edge[1] + Math.sin(ang) * S0 * .9], outP = [edge[0] - Math.cos(ang) * S0 * 3, edge[1] - Math.sin(ang) * S0 * 3];
-      const w0 = wristFor(tipOf(rig.pose, 'tips'), outP[0], outP[1], rig.roll.t, rig.yaw.t, rig.pitch.t, .3);
-      rig.x.x = rig.x.t = w0[0]; rig.y.x = rig.y.t = w0[1];
-      await c.goPt('tips', inP[0], inP[1], { dur: rnd(900, 1400), path: 'direct', ease: 'lurch', z: .3 });
-      for (let i = 0; i < 3; i++) { const f = Math.floor(rnd(0, 4)); c.finger(f, [rnd(.2, 1), rnd(.4, 1.3), .7], 160); await c.wait(rnd(250, 500)); }
-      await c.goPt('tips', outP[0], outP[1], { dur: 500, path: 'direct', ease: 'in', z: .3 });
-      c.over(false); rig.z.x = rig.z.t = -.8;
+  // Roaming while a bonus game runs: over the overlay, circling the game box. Fingers reach in from outside,
+  // the cuff points away, so the play area stays mostly free. No teleports: every move is a spring path.
+  const ROAM_SC = .78;
+  function boxRect() { const e = $('#bonus.on #box'); if (!e) return null; const r = e.getBoundingClientRect(); return r.width > 40 && r.height > 40 ? r : null; }
+  // Point on the box frame. side 0 top, 1 right, 2 bottom, 3 left. `out` > 0 sits outside, < 0 inside.
+  function rimPt(r, side, u, out) {
+    const ins = S0 * .35, cl = (x, y) => [clamp(x, ins, W - ins), clamp(y, ins, Hh - ins)];
+    const p = [[r.left + r.width * u, r.top], [r.right, r.top + r.height * u], [r.left + r.width * u, r.bottom], [r.left, r.top + r.height * u]][side];
+    const n = [[0, -1], [1, 0], [0, 1], [-1, 0]][side];
+    // room outside this side: if there is none, hug the edge from the inside
+    const room = [r.top, W - r.right, Hh - r.bottom, r.left][side];
+    const o = out > 0 ? Math.min(out, Math.max(0, room - S0 * .3)) : out;
+    return { p: cl(p[0] + n[0] * o, p[1] + n[1] * o), ang: Math.atan2(-n[1], -n[0]), n, room };
+  }
+  // Prefer sides with space around them, avoid repeating the same spot.
+  function rimPick(r, out) {
+    const rooms = [r.top, W - r.right, Hh - r.bottom, r.left];
+    const side = +pick('rimSide', [0, 1, 2, 3].map(s => [String(s), .35 + clamp(rooms[s] / (S0 * 2), 0, 1.6)]), 3);
+    const cand = [], p = freshSpot(() => { const q = rimPt(r, side, rnd(.1, .9), out); cand.push(q); return q.p; }, 6);
+    return cand.find(q => q.p === p) || cand[0];
+  }
+  function boxTargets() {
+    return [...document.querySelectorAll('#bonus.on #box button, #bonus.on #box .cell, #bonus.on #box .side, #bonus.on #box td, #bonus.on #box [data-i]')].map(visRect).filter(Boolean);
+  }
+  // Does segment a-b cross the box (shrunk so edge hugging spots do not count)? Liang-Barsky clip.
+  function crosses(a, b, r) {
+    const ins = S0 * .45, L = r.left + ins, R = r.right - ins, T = r.top + ins, B = r.bottom - ins;
+    if (L >= R || T >= B) return false;
+    const dx = b[0] - a[0], dy = b[1] - a[1]; let t0 = 0, t1 = 1;
+    for (const [p, q] of [[-dx, a[0] - L], [dx, R - a[0]], [-dy, a[1] - T], [dy, B - a[1]]]) {
+      if (!p) { if (q < 0) return false; continue; }
+      const t = q / p; if (p < 0) { if (t > t1) return false; if (t > t0) t0 = t; } else { if (t < t0) return false; if (t < t1) t1 = t; }
+    }
+    return t0 < t1;
+  }
+  // Corner waypoints from a to b around the box, the short way round. Empty when the straight line is clear.
+  function around(r, a, b) {
+    if (!crosses(a, b, r)) return [];
+    const m = S0 * .75, ins = S0 * .3, cx = (r.left + r.right) / 2, cy = (r.top + r.bottom) / 2;
+    const C = [[r.left - m, r.top - m], [r.right + m, r.top - m], [r.right + m, r.bottom + m], [r.left - m, r.bottom + m]].map(([x, y]) => [clamp(x, ins, W - ins), clamp(y, ins, Hh - ins)]);
+    const ang = p => Math.atan2(p[1] - cy, p[0] - cx), a0 = ang(a), cwTo = p => ((ang(p) - a0) % TAU + TAU) % TAU;
+    const span = cwTo(b), cw = span <= PI;
+    return C.map(p => ({ p, d: cw ? cwTo(p) : TAU - cwTo(p) })).filter(o => o.d > 0 && o.d < (cw ? span : TAU - span)).sort((u, v) => u.d - v.d).map(o => o.p);
+  }
+  const faceBox = (c, r, p, k = 45) => c.aim('tips', Math.atan2((r.top + r.bottom) / 2 - p[1], (r.left + r.right) / 2 - p[0]) + rnd(-.3, .3), rnd(-.5, .5), rnd(-.15, .25), k);
+  // goPt that travels around the box instead of across it
+  async function rimGo(c, r, which, sx, sy, o = {}) {
+    const z = o.z ?? rig.z.t, w = wristFor(tipOf(rig.pose, which), sx, sy, rig.roll.t, rig.yaw.t, rig.pitch.t, z);
+    let a = [rig.x.x, rig.y.x];
+    // inside the box (after pointing at something): leave through the nearest edge first
+    if (a[0] > r.left && a[0] < r.right && a[1] > r.top && a[1] < r.bottom && crosses(a, w, r)) {
+      const m = S0 * .6, ins = S0 * .3, d = [a[1] - r.top, r.right - a[0], r.bottom - a[1], a[0] - r.left], s = d.indexOf(Math.min(...d));
+      a = [[a[0], r.top - m], [r.right + m, a[1]], [a[0], r.bottom + m], [r.left - m, a[1]]][s].map((v, i) => clamp(v, ins, (i ? Hh : W) - ins));
+      await c.go(a[0], a[1], { speed: (o.speed || 450) * 1.2, z, path: 'direct', ease: 'sine', k: 70 });
+    }
+    for (const p of around(r, a, w)) {
+      if (o.face) faceBox(c, r, p);
+      await c.go(p[0], p[1], { speed: (o.speed || 450) * 1.15, z, path: 'arc', bend: .12, ease: 'lin', k: 55 });
+    }
+    if (o.face) faceBox(c, r, [sx, sy]);
+    await c.goPt(which, sx, sy, { ...o, z });
+  }
+  async function drum(c, n) { for (let i = 0; i < n; i++) { const f = Math.floor(rnd(0, 4)); c.finger(f, [rnd(.5, 1.1), rnd(.6, 1.2), .6], 420); await c.wait(rnd(90, 160)); c.finger(f, [.3, .4, .25], 260); await c.wait(rnd(120, 380)); } }
+  const ROAM = {
+    // glide along the frame to a fresh spot, fingers reaching toward the game
+    async glide(c, r) {
+      c.over(true); c.scale(ROAM_SC, 60); c.pose(any(['relax', 'open', 'claw', 'limp']), 60);
+      const q = rimPick(r, S0 * rnd(.5, 1.1));
+      c.aim('tips', q.ang + rnd(-.35, .35), rnd(-.5, .5), rnd(-.2, .25), 50);
+      await rimGo(c, r, 'tips', q.p[0], q.p[1], { speed: rnd(320, 520), z: rnd(.05, .3), path: any(['arc', 's']), k: 90 });
+      if (chance(.6)) await drum(c, 2 + Math.floor(rnd(0, 3))); else await c.wait(rnd(500, 1300));
+    },
+    // fingers hooked over the box edge, watching
+    async perch(c, r) {
+      c.over(true); c.scale(ROAM_SC, 60); c.pose(any(['hook', 'claw', 'relax']), 70);
+      const q = rimPick(r, -S0 * .18);
+      c.aim('tips', q.ang, rnd(-.25, .25), rnd(.05, .3), 60);
+      await rimGo(c, r, 'tips', q.p[0], q.p[1], { speed: rnd(380, 600), z: .1, path: any(['arc', 's']), k: 100 });
+      c.hov(.4); await drum(c, 1 + Math.floor(rnd(0, 3))); await c.wait(rnd(600, 1500)); c.hov(1);
+    },
+    // point at something in the game from just outside the frame
+    async hint(c, r) {
+      const list = boxTargets(); if (!list.length) return ROAM.glide(c, r);
+      const t = any(list), tx = t.left + t.width / 2, ty = t.top + t.height / 2;
+      const q = rimPick(r, S0 * .4), from = Math.atan2(ty - q.p[1], tx - q.p[0]);
+      // pointAt takes its distance in hand units
+      const dist = clamp(hyp(tx - q.p[0], ty - q.p[1]) / S0 - .4, .9, 2.6);
+      c.over(true); c.scale(ROAM_SC, 60); c.pose('point', 140); c.aim('index', from, rnd(-.4, .4), rnd(-.2, .25), 110);
+      await rimGo(c, r, 'index', tx - Math.cos(from) * dist * S0, ty - Math.sin(from) * dist * S0, { speed: 600, z: .15, path: 'arc' });
+      await pointAt(c, tx, ty, { from, dist, z: .15, over: true, speed: 700, jab: chance(.5) ? 1 : 0 });
+      await c.wait(rnd(500, 1000));
+    },
+    // knuckle knock on the frame, like tapping a fish tank
+    async knock(c, r) {
+      const q = rimPick(r, 0), [tx, ty] = q.p;
+      c.over(true); c.scale(ROAM_SC, 60); c.pose('fist', 160);
+      c.aim('knuck', q.ang, rnd(-.3, .3), -.2, 120);
+      const bx = tx - Math.cos(q.ang) * S0 * .9, by = ty - Math.sin(q.ang) * S0 * .9;
+      await rimGo(c, r, 'knuck', bx, by, { speed: 700, z: .2, path: 'arc' });
+      for (let i = 0; i < 2 + Math.floor(rnd(0, 2)); i++) {
+        await c.goPt('knuck', tx - Math.cos(q.ang) * S0 * .15, ty - Math.sin(q.ang) * S0 * .15, { dur: 90, path: 'direct', ease: 'in', k: 800, bank: 0, z: .2 });
+        c.burst(tx, ty, 'knock', .5);
+        await c.goPt('knuck', bx, by, { dur: 170, path: 'direct', ease: 'out', k: 450, bank: 0, z: .2 });
+        await c.wait(rnd(60, 180));
+      }
+      c.soft();
+    },
+    // slow lap to the far side of the box, around it, fingers always toward the game
+    async lap(c, r) {
+      c.over(true); c.scale(ROAM_SC, 60); c.pose(any(['relax', 'splay', 'open']), 50);
+      const q = rimPick(r, S0 * .8);
+      await rimGo(c, r, 'mid', q.p[0], q.p[1], { speed: rnd(300, 420), z: .22, path: 'arc', face: true });
+      await c.wait(rnd(200, 600));
     },
   };
+  const ROAM_W = [['glide', 1.4], ['perch', 1], ['hint', .9], ['lap', .7], ['knock', .3]];
 
   // ---------------------------------------------------------------- Wheel spin
   const CORNERS = { tl: -.75 * PI, tr: -.25 * PI, br: .25 * PI, bl: .75 * PI };
@@ -1082,7 +1182,13 @@ const Glove = (() => {
       run('watch:' + name, async c => { const job = WATCH[name](c); job.catch(() => {}); await Promise.race([job, c.until(() => (!late && st.spinEnd - now() < 1600) || st.phase !== 'spinning')]); }, 1);
       return;
     }
-    if (overlayOn()) { const n = pick('lurk', [['deep', 2.5], ['edge', .7]]); run('lurk:' + n, LURK[n], 0); return; }
+    if (overlayOn()) {
+      const r = boxRect();
+      if (r) { const n = pick('roam', ROAM_W); run('roam:' + n, async c => { await ROAM[n](c, r); if (chance(.3)) await c.wait(rnd(300, 900)); }, 0); }
+      else run('roam:wait', async c => { c.scale(ROAM_SC, 60); await c.wait(300); }, 0);
+      return;
+    }
+    if (rig.sc.t !== 1) rig.sc.to(1, 60);
     const names = CALM ? CALM_IDLE : Object.keys(IDLE_W);
     const name = pick('idle', names.map(n => [n, (IDLE_W[n] || 1) * (1 + (AGIT[n] ? (AGIT[n] - 1) * st.agit * 2 : 0))]), 9);
     run('idle:' + name, async c => { c.over(false); await IDLE[name](c); if (chance(.35)) await c.wait(rnd(300, 1200)); }, 0);
@@ -1107,7 +1213,6 @@ const Glove = (() => {
     W = innerWidth; Hh = innerHeight; dpr = Math.min(2, devicePixelRatio || 1);
     S0 = clamp(Math.min(W, Hh) * .1, 38, 112);
     [cv, fxc].forEach(c => { c.width = Math.ceil(W * dpr); c.height = Math.ceil(Hh * dpr); });
-    dirty = null;
   }
   function init(adapter) {
     if (started) { A = adapter || A; return; }
