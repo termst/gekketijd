@@ -86,31 +86,56 @@ const RH = (() => {
     if (!myName) $('nm').focus();
   }
 
-  // ---- Art (ported from the base game) ----
+  // ---- Art ----
+  // Style: printed carnival poster. Flat inks, two-tone (cel) shading, halftone dots and hard offset shadows instead of soft fades.
   const COINS = [[5, '#b8452f', '#5c1a0e'], [10, '#2463b8', '#0d2f63'], [25, '#12805f', '#053f2e'], [100, '#23283a', '#05070d'], [500, '#c98a1e', '#6b4206']];
   function chipSvg([v, c, d]) {
     let e = ''; for (let i = 0; i < 8; i++) e += `<path d="M-8 -48A49 49 0 0 1 8 -48L6 -35H-6Z" fill="#fff6e6" transform="rotate(${i * 45})"/>`;
-    return `<svg viewBox="-50 -50 100 100" aria-hidden="true"><circle r="49" fill="${d}"/><circle r="47" fill="${c}"/>${e}<circle r="35" fill="${d}"/><circle r="32" fill="#fff6e6"/><circle r="28" fill="${c}"/><path d="M-41 -20A46 46 0 0 1 20 -41" stroke="#fff" stroke-opacity=".5" stroke-width="3" fill="none"/><text y="${v > 99 ? 7 : 8}" text-anchor="middle" font-family='${FONT}' font-weight="400" font-size="${v > 99 ? 21 : 25}" letter-spacing="${v > 99 ? 1 : 1.2}" fill="#fff" stroke="#fff" stroke-width="${v > 99 ? 1.3 : 1.6}" stroke-linejoin="round">${v}</text></svg>`;
+    return `<svg viewBox="-50 -50 100 100" aria-hidden="true"><circle r="49" fill="${d}"/><circle r="47" fill="${c}"/>${e}<circle r="35" fill="${d}"/><circle r="32" fill="#fff6e6"/><circle r="28" fill="${c}"/><path d="M-41 -20A46 46 0 0 1 20 -41" stroke="#fff" stroke-opacity=".5" stroke-width="3" fill="none"/><text x="${v > 99 ? 1 : 1.2}" y="${v > 99 ? 7 : 8}" text-anchor="middle" font-family='${FONT}' font-weight="400" font-size="${v > 99 ? 21 : 25}" letter-spacing="${v > 99 ? 2 : 2.4}" fill="#fff" stroke="#fff" stroke-width="${v > 99 ? 1.3 : 1.6}" stroke-linejoin="round">${v}</text></svg>`;
   }
   function stackHtml(n) { const a = []; for (const c of [...COINS].reverse()) while (n >= c[0] && a.length < 5) { a.push(c); n -= c[0]; } return '<span class="stack">' + a.map((c, i) => chipSvg(c).replace('<svg', '<svg style="bottom:' + i * 4 + 'px"')).join('') + '</span>'; }
+
+  // Skin per field: f = wheel wedge, pl = number plaque, tk = desk ticket.
+  const SKIN = {
+    one: { f: '#BFE3D6', pl: '#34434A', tk: '#7FA596' }, two: { f: '#F6C343', pl: '#664632', tk: '#C9953F' },
+    five: { f: '#F4B6B0', pl: '#574C6C', tk: '#C98886' }, ten: { f: '#C9B6E4', pl: '#4B2342', tk: '#8F7AB0' },
+    spare: { f: '#1F3C9E', tk: '#2343AE' }, grab: { f: '#1E7A3C', tk: '#1F8441' }, drop: { f: '#A02A8E', tk: '#A42C92' }, prod: { f: '#B3202A', tk: '#BA2430' }
+  };
+  const INK = '#2b1606', G1 = '#FFF0B8', G2 = '#F2C65A', G3 = '#D9A13A', G4 = '#A8721E', CREAM = '#FFF4DC', TITLE = '#FFD45C';
+  const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+  const mix = (a, b, t) => { const x = hex(a), y = hex(b); return 'rgb(' + x.map((v, i) => Math.round(v + (y[i] - v) * t)).join(',') + ')'; };
+  // Bonus medallions, shared by the wheel (as images) and the desk tickets (inline). Flat inks, a light half and a dark half.
+  const GLYPH = {
+    spare: `<circle r="10" fill="${G3}" stroke="${INK}" stroke-width="1.3"/><path d="M-7.1-7.1A10 10 0 0 1 7.1 7.1Z" fill="${G2}"/><circle r="6.6" fill="none" stroke="${INK}" stroke-width="1.5"/><path d="M-3.2-4.3h6.4L0 0l3.2 4.3h-6.4L0 0z" fill="${INK}"/>`,
+    grab: `<path d="M-10-3-5.5-8.5h11L10-3 0 10z" fill="#BFE6FA" stroke="${INK}" stroke-width="1.2" stroke-linejoin="round"/><path d="M-10-3H0L0 10z" fill="#8CC6E6"/><path d="M-10-3h20M-5.5-8.5-3-3 0 10 3-3 5.5-8.5M-3-3 0-8.5 3-3" fill="none" stroke="${INK}" stroke-width=".9"/>`,
+    drop: `<circle cy="-3" r="5.8" fill="#F4F1EA" stroke="${INK}" stroke-width="1.1"/><path d="M1.5-8.3A5.8 5.8 0 0 1 1.5 2.3 5.8 5.8 0 0 0 1.5-8.3" fill="#C9CCD6"/><g fill="${G2}" stroke="${INK}" stroke-width=".8"><circle cx="-7.5" cy="7" r="2"/><circle cx="7.5" cy="7" r="2"/><circle cy="10.5" r="2"/></g>`,
+    prod: `<circle r="10" fill="${CREAM}" stroke="${INK}" stroke-width="1.4"/><path d="M0-8.2v2M8.2 0h-2M0 8.2v-2M-8.2 0h2" stroke="${INK}" stroke-width="1.4"/><path d="M0 0V-6.4M0 0l4.6 2.8" stroke="${INK}" stroke-width="1.8" stroke-linecap="round"/><circle r="1.7" fill="#B3202A"/>`
+  };
+  const medal = k => `<svg viewBox="-20 -20 40 40" aria-hidden="true"><circle r="19.4" fill="${G3}" stroke="${INK}" stroke-width="1.2"/><path d="M-13.7-13.7A19.4 19.4 0 0 1 13.7 13.7Z" fill="${G2}"/><circle r="15.4" fill="${mix(SKIN[k].f, '#000000', .45)}" stroke="${INK}" stroke-width="1.2"/>${GLYPH[k]}</svg>`;
+  const STACK_BADGE = `<svg viewBox="-20 -20 40 40" aria-hidden="true">${[8, 1, -6].map((y, i) => `<ellipse cy="${y + 3}" rx="13" ry="5" fill="${INK}"/><rect x="-13" y="${y}" width="26" height="3" fill="${i % 2 ? G4 : '#8a1420'}"/><ellipse cy="${y}" rx="13" ry="5" fill="${i % 2 ? G2 : '#D8322B'}" stroke="${INK}" stroke-width=".8"/><ellipse cy="${y}" rx="9" ry="3.3" fill="none" stroke="${CREAM}" stroke-width="1.4" stroke-dasharray="2.4 2.2"/>`).join('')}</svg>`;
+  const ICON = {};
+  BONUS_KEYS.forEach(k => { const im = new Image(); im.onload = () => { if (cx) { makeArt(); draw(); } }; im.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(medal(k).replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"')); ICON[k] = im; });
+
+  // Stage: art deco swirl in flat bands, emerald left and crimson to hot pink right, gold rules, string lights, halftone screen.
   function scenery() {
-    let s = `<defs><radialGradient id="wall" cx=".5" cy=".4" r=".75"><stop stop-color="#7a4426"/><stop offset=".5" stop-color="#4a2415"/><stop offset="1" stop-color="#160a06"/></radialGradient>
- <linearGradient id="br" x2="1"><stop stop-color="#4d380f"/><stop offset=".35" stop-color="#f3dc98"/><stop offset=".6" stop-color="#b48a38"/><stop offset="1" stop-color="#3d2c0c"/></linearGradient>
- <linearGradient id="fold" x2="1"><stop stop-color="#1c0508"/><stop offset=".45" stop-color="#7d1524"/><stop offset=".65" stop-color="#520c17"/><stop offset="1" stop-color="#140305"/></linearGradient>
- <linearGradient id="fl" x2="0" y2="1"><stop stop-color="#000" stop-opacity=".7"/><stop offset="1" stop-color="#000" stop-opacity=".1"/></linearGradient>
- <radialGradient id="glow"><stop stop-color="#ffdc94" stop-opacity=".65"/><stop offset="1" stop-color="#ffdc94" stop-opacity="0"/></radialGradient></defs><rect width="1600" height="900" fill="url(#wall)"/>`;
-    for (let x = -40; x < 1640; x += 168) s += `<rect x="${x + 14}" y="110" width="140" height="330" fill="#0002" stroke="#1c0d07" stroke-width="7"/><rect x="${x + 20}" y="116" width="128" height="318" fill="none" stroke="#b48a38" stroke-opacity=".55" stroke-width="2"/><rect x="${x + 14}" y="478" width="140" height="116" fill="#0002" stroke="#1c0d07" stroke-width="7"/><rect x="${x + 20}" y="484" width="128" height="104" fill="none" stroke="#b48a38" stroke-opacity=".4" stroke-width="2"/>`;
-    s += '<rect y="454" width="1600" height="10" fill="#b48a38"/><rect y="78" width="1600" height="12" fill="#b48a38"/><circle cx="800" cy="360" r="520" fill="url(#glow)" opacity=".7"/>';
-    [212, 380, 1220, 1388].forEach(x => s += `<circle cx="${x}" cy="225" r="150" fill="url(#glow)"/><rect x="${x - 7}" y="230" width="14" height="80" fill="url(#br)"/><path d="M${x - 28} 235L${x - 18} 180H${x + 18}L${x + 28} 235Z" fill="#fff0c4"/><rect x="${x - 30}" y="233" width="60" height="7" fill="url(#br)"/>`);
-    s += '<rect y="610" width="1600" height="290" fill="#3b0c16"/>'; const ys = [0, 26, 60, 104, 160, 290];
-    for (let r = 0; r < 5; r++) for (let c = -9; c < 9; c++) { const q = (u, y) => (800 + u * 150 * (.6 + y / 290 * 1.1)).toFixed(0) + ' ' + (610 + y), m = (ys[r] + ys[r + 1]) / 2; s += `<path d="M${q(c + .5, ys[r])}L${q(c + 1, m)}L${q(c + .5, ys[r + 1])}L${q(c, m)}Z" fill="${(c + r) & 1 ? '#661524' : '#51101d'}" stroke="#b48a38" stroke-opacity=".45" stroke-width="2"/>`; }
-    s += '<rect y="610" width="1600" height="290" fill="url(#fl)"/><rect y="596" width="1600" height="16" fill="url(#br)"/>';
-    for (let i = 0; i < 4; i++) s += `<path d="M${i * 44 - 10} 0H${i * 44 + 42}L${i * 34 + 16} 720H${i * 34 - 30}Z" fill="url(#fold)"/><path d="M${1610 - i * 44} 0H${1558 - i * 44}L${1584 - i * 34} 720H${1630 - i * 34}Z" fill="url(#fold)"/>`;
+    const X = 800, Y = 330, n = 16, pt = (cx, cy, r, a) => (cx + Math.cos(a) * r).toFixed(1) + ' ' + (cy + Math.sin(a) * r).toFixed(1);
+    let s = `<defs><pattern id="sc-ht" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(30)"><circle cx="3.5" cy="3.5" r="1.25" fill="#12030a"/></pattern></defs><rect width="1600" height="900" fill="#12050b"/>`;
+    const lights = ['', '', ''];
+    for (let i = n - 1; i >= 0; i--) {
+      const cx = X + i * 7, cy = Y + i * 11, r = 250 + i * 82, sp = Math.PI / 2 + i * .16, odd = i % 2;
+      const lit = Math.min(1, i / 5) * (1 - Math.max(0, i - 5) / 14); // deep near the wheel, brightest a few bands out
+      const green = mix('#06281a', odd ? '#157e4d' : '#0e623a', lit), pink = mix('#3e0516', odd ? '#c93d78' : '#9c1844', lit);
+      s += `<path d="M${pt(cx, cy, r, sp)}A${r} ${r} 0 0 1 ${pt(cx, cy, r, sp + Math.PI)}Z" fill="${green}"/><path d="M${pt(cx, cy, r, sp + Math.PI)}A${r} ${r} 0 0 1 ${pt(cx, cy, r, sp)}Z" fill="${pink}"/><circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#2b0d0d" stroke-width="${odd ? 5 : 3}"/><circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${G3}" stroke-opacity="${(.35 + lit * .5).toFixed(2)}" stroke-width="${odd ? 2.2 : 1.2}"/>`;
+      if (odd) { const m = Math.round(TAU * r / 44); for (let j = 0; j < m; j++) { const a = j / m * TAU, x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r; if (x > -10 && x < 1610 && y > -10 && y < 910) lights[j % 3] += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="5" fill="#ffd9a0" opacity=".2"/><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.2" fill="${CREAM}" stroke="${INK}" stroke-width=".8"/>`; } }
+    }
+    s += '<rect width="1600" height="900" fill="url(#sc-ht)" opacity=".35"/>' + lights.map((l, i) => `<g class="tw t${i}">${l}</g>`).join('');
     $('scene').innerHTML = s;
   }
-  const R = 450, CX = 550, CY = 575; let cx, face, angle = 0, flap = 0, blink = 0, hitSeg = -1;
-  function metal(c, rot = 0) { const g = c.createConicGradient(rot, 0, 0); ['#f7e6ae', '#b48a38', '#5e4414', '#e6c673', '#fff3c9', '#b48a38', '#4d380f', '#e0bd62', '#f7e6ae'].forEach((x, i) => g.addColorStop(i / 8, x)); return g; }
-  function star(c, n, a, b) { c.beginPath(); for (let i = 0; i < n * 2; i++) { const q = i / (n * 2) * TAU - Math.PI / 2, r = i % 2 ? b : a; c.lineTo(Math.cos(q) * r, Math.sin(q) * r); } c.closePath(); }
+
+  // ---- Main wheel (canvas). Logical size 1100 x 1100, drawn at K x resolution. Static layers are cached. ----
+  const K = 1.5, W = 1100, H = 1100, R = 450, CX = 550, CY = 575, FR = R + 4, HUB = 134;
+  let cx, face, base, over, pegImg, bulbOn, bulbOff, glit, angle = 0, flap = 0, blink = 0, hitSeg = -1;
+  function layer(w, h) { const e = document.createElement('canvas'); e.width = Math.ceil(w * K); e.height = Math.ceil(h * K); const c = e.getContext('2d'); c.scale(K, K); return [e, c]; }
   // Canvas twin of the CSS heft scale in style.css. Escargoth has one weight (400), so heft h (0..3) is a hairline
   // outline plus tracking that grows slightly faster than the outline. Always set canvas fonts through heft().
   function heft(c, px, h = 2) { c.font = `400 ${px}px ${FONT}`; c.letterSpacing = ((.01 + h * .015) * px).toFixed(2) + 'px'; c.heftW = h * .011 * px; }
@@ -120,38 +145,162 @@ const RH = (() => {
     max ? c.fillText(s, x, y, max) : c.fillText(s, x, y);
   }
   function disc(c, r, f) { c.beginPath(); c.arc(0, 0, r, 0, TAU); c.fillStyle = f; c.fill(); }
+  function ringPath(c, r0, r1) { c.beginPath(); c.arc(0, 0, r1, 0, TAU); c.arc(0, 0, r0, 0, TAU, true); }
+  function ring(c, r0, r1, f) { ringPath(c, r0, r1); c.fillStyle = f; c.fill(); }
+  function wedge(c, a, w, r0, r1) { c.beginPath(); c.arc(0, 0, r1, a - w, a + w); c.arc(0, 0, r0, a + w, a - w, true); c.closePath(); }
+  function rr(c, x, y, w, h, r) { c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); }
+  function poly(c, p, r) { c.beginPath(); const n = p.length; for (let i = 0; i < n; i++) { const a = p[i], b = p[(i + 1) % n], m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]; if (!i) c.moveTo(m[0], m[1]); const d = p[(i + 2) % n]; c.arcTo(b[0], b[1], (b[0] + d[0]) / 2, (b[1] + d[1]) / 2, r); } c.closePath(); }
+  // Fill the top-left half plane (light comes from the top left) inside the current clip.
+  function lightHalf(c, f, off = 0, big = 2000) { c.beginPath(); c.moveTo(-big + off, -big + off); c.lineTo(big + off, -big + off); c.lineTo(-big + off, big + off); c.closePath(); c.fillStyle = f; c.fill(); }
+  // Cel shaded gold band: base ink, a light top-left half, a highlight rule, inked edges.
+  function goldBand(c, r0, r1) {
+    ring(c, r0, r1, G3); c.save(); ringPath(c, r0, r1); c.clip(); lightHalf(c, G2); c.restore();
+    c.beginPath(); c.arc(0, 0, r1 - Math.min(3, (r1 - r0) / 3), Math.PI * 1.02, Math.PI * 1.48); c.lineWidth = 1.8; c.strokeStyle = G1; c.stroke();
+    c.lineWidth = 1.5; c.strokeStyle = INK; [r0, r1].forEach(r => { c.beginPath(); c.arc(0, 0, r, 0, TAU); c.stroke(); });
+  }
+  function metal(c, rot = 0) { const g = c.createConicGradient(rot, 0, 0); [G1, G3, G4, G2, G1, G3, G4, G2, G1].forEach((x, i) => g.addColorStop(i / 8, x)); return g; }
+  const hsh = n => { n = Math.imul(n ^ n >>> 15, 0x2c1b3c6d); n = Math.imul(n ^ n >>> 12, 0x297a2d39); return ((n ^ n >>> 15) >>> 0) / 4294967296; };
+  function spark(c, x, y, s, a) { c.save(); c.translate(x, y); c.globalAlpha = a; c.fillStyle = '#fffbe8'; c.beginPath(); c.moveTo(0, -s); c.quadraticCurveTo(0, 0, s, 0); c.quadraticCurveTo(0, 0, 0, s); c.quadraticCurveTo(0, 0, -s, 0); c.quadraticCurveTo(0, 0, 0, -s); c.fill(); c.restore(); }
+  function glitter() {
+    if (glit) return glit;
+    const e = document.createElement('canvas'); e.width = e.height = 200; const c = e.getContext('2d'); let s = 11;
+    const rnd = () => (s = s * 16807 % 2147483647) / 2147483647;
+    for (let i = 0; i < 700; i++) { c.fillStyle = `rgba(255,${235 + rnd() * 20 | 0},${170 + rnd() * 85 | 0},${(.15 + rnd() * .5).toFixed(2)})`; c.beginPath(); c.arc(rnd() * 200, rnd() * 200, .4 + rnd() * rnd() * 1.3, 0, TAU); c.fill(); }
+    for (let i = 0; i < 10; i++) spark(c, rnd() * 200, rnd() * 200, 2 + rnd() * 2.5, .85);
+    return glit = e;
+  }
+  function bulb(on) {
+    const [e, c] = layer(36, 36); c.translate(18, 18);
+    if (on) disc(c, 10, 'rgba(255,226,150,.3)');
+    disc(c, 5.8, INK); disc(c, 4.6, on ? CREAM : '#6e4a2a');
+    if (on) { c.save(); c.beginPath(); c.arc(0, 0, 4.6, 0, TAU); c.clip(); lightHalf(c, '#FFE6A8', 1.6, 20); c.restore(); c.beginPath(); c.arc(-1.5, -1.6, 1.3, 0, TAU); c.fillStyle = '#fff'; c.fill(); }
+    return e;
+  }
+  function makePeg() {
+    const [e, c] = layer(24, 24); c.translate(12, 12);
+    c.beginPath(); c.arc(1.6, 2.4, 6, 0, TAU); c.fillStyle = 'rgba(30,10,4,.5)'; c.fill();
+    disc(c, 6, G4); c.save(); c.beginPath(); c.arc(0, 0, 6, 0, TAU); c.clip(); lightHalf(c, G2, 1, 20); c.restore();
+    c.beginPath(); c.arc(0, 0, 6, 0, TAU); c.lineWidth = 1.2; c.strokeStyle = INK; c.stroke();
+    c.beginPath(); c.arc(-2, -2.2, 1.4, 0, TAU); c.fillStyle = G1; c.fill();
+    return e;
+  }
+  // Halftone screen toward the hub: dots shrink outward, replacing a gradient fade.
+  function halftone(c, w, col) {
+    c.fillStyle = col;
+    for (let r = 132, row = 0; r < 262; r += 8.5, row++) {
+      const d = 3.1 * (1 - (r - 132) / 140); if (d < .45) break;
+      const n = Math.max(1, Math.floor(2 * r * w / 8.5)), step = 2 * w / n;
+      for (let j = 0; j < n; j++) { const a = -w + (j + (row % 2 ? .25 : .75)) * step; c.beginPath(); c.arc(Math.cos(a) * r, Math.sin(a) * r, d, 0, TAU); c.fill(); }
+    }
+  }
+  function plaque(c, t, s) {
+    c.save(); c.translate(R - 128, 0); c.rotate(Math.PI / 4); c.fillStyle = s.pl; c.fillRect(-4, -4, 8, 8); c.restore();
+    c.save(); c.translate(R - 55, 0); c.rotate(Math.PI / 2);
+    const w = 44, h = 62;
+    rr(c, -w / 2 + 2.5, -h / 2 + 3.5, w, h, 10); c.fillStyle = 'rgba(30,10,4,.45)'; c.fill();
+    rr(c, -w / 2, -h / 2, w, h, 10); c.fillStyle = s.pl; c.fill();
+    c.save(); c.clip(); c.fillStyle = mix(s.pl, '#000000', .3); c.fillRect(-w / 2, h / 2 - 7, w, 7); c.fillStyle = mix(s.pl, '#ffffff', .2); c.fillRect(-w / 2, -h / 2, w, 3); c.restore();
+    rr(c, -w / 2, -h / 2, w, h, 10); c.lineWidth = 1.6; c.strokeStyle = INK; c.stroke();
+    rr(c, -w / 2 + 4, -h / 2 + 4, w - 8, h - 11, 6.5); c.lineWidth = 1.2; c.strokeStyle = 'rgba(255,244,220,.55)'; c.stroke();
+    heft(c, t.pay > 9 ? 40 : 46, 3); c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.fillStyle = INK; htext(c, t.n, 1.2, 1.5, w - 9); c.fillStyle = CREAM; htext(c, t.n, 0, -1, w - 9);
+    c.restore();
+  }
+  function stripe(c, k, t) {
+    const txt = t.n.toUpperCase(), x0 = 168, x1 = R - 60, fs = 27, x = (x0 + x1) / 2;
+    c.save(); heft(c, fs, 2.5); c.textAlign = 'center'; c.textBaseline = 'middle'; c.lineJoin = 'round';
+    c.fillStyle = INK; c.fillText(txt, x + 1.5, 4, x1 - x0); c.lineWidth = 4; c.strokeStyle = INK; c.strokeText(txt, x, 1.5, x1 - x0);
+    c.fillStyle = TITLE; htext(c, txt, x, 1.5, x1 - x0); c.restore();
+    c.save(); c.translate(R - 30, 0); c.rotate(Math.PI / 2); if (ICON[k].complete && ICON[k].naturalWidth) c.drawImage(ICON[k], -19, -19, 38, 38); c.restore();
+  }
   function makeFace() {
-    face = document.createElement('canvas'); face.width = face.height = 960; const c = face.getContext('2d'); c.translate(480, 480);
+    let c; [face, c] = layer(2 * FR, 2 * FR); c.translate(FR, FR);
+    const w = TAU / N / 2, pat = c.createPattern(glitter(), 'repeat');
     DIAL.forEach((k, i) => {
-      const t = TYPES[k], a = i * TAU / N - Math.PI / 2, w = TAU / N / 2, g = c.createRadialGradient(0, 0, 110, 0, 0, R);
-      g.addColorStop(0, t.d); g.addColorStop(.7, t.c); g.addColorStop(1, t.c); c.fillStyle = g; c.beginPath(); c.moveTo(0, 0); c.arc(0, 0, R, a - w, a + w); c.closePath(); c.fill();
-      c.strokeStyle = '#e6c673'; c.lineWidth = 2.5; c.stroke(); c.save(); c.rotate(a); c.textBaseline = 'middle'; c.fillStyle = t.t;
-      if (t.pay) { c.translate(R - 42, 0); c.rotate(Math.PI / 2); c.textAlign = 'center'; heft(c, t.pay > 9 ? 34 : 40, 3); htext(c, t.n, 0, 3); }
-      else { c.save(); c.translate(R - 34, 0); star(c, 4, 17, 6); c.fill(); c.restore(); c.textAlign = 'right'; heft(c, 30, 2); htext(c, t.n, R - 60, 2, 235); }
+      const t = TYPES[k], s = SKIN[k], a = i * TAU / N - Math.PI / 2;
+      wedge(c, a, w + .002, 0, R); c.fillStyle = s.f; c.fill();
+      c.save(); c.clip();
+      if (t.pay) { c.rotate(a); halftone(c, w, mix(s.f, s.pl, .32)); }
+      else { c.globalCompositeOperation = 'screen'; c.globalAlpha = .35; c.fillStyle = pat; c.fill(); c.globalCompositeOperation = 'source-over'; c.globalAlpha = 1; c.rotate(a); halftone(c, w, 'rgba(0,0,0,.28)'); }
       c.restore();
+      c.save(); c.rotate(a); t.pay ? plaque(c, t, s) : stripe(c, k, t); c.restore();
     });
+    for (let i = 0; i < N; i++) {
+      const a = (i + .5) * TAU / N - Math.PI / 2, x = Math.cos(a), y = Math.sin(a);
+      c.beginPath(); c.moveTo(x * 120, y * 120); c.lineTo(x * R, y * R); c.strokeStyle = INK; c.lineWidth = 3.2; c.stroke(); c.strokeStyle = G2; c.lineWidth = 1.2; c.stroke();
+    }
+  }
+  function crescent(c, r, dx, dy, f) { c.save(); c.beginPath(); c.arc(0, 0, r, 0, TAU); c.clip(); c.beginPath(); c.arc(0, 0, r, 0, TAU); c.arc(dx, dy, r, 0, TAU, true); c.fillStyle = f; c.fill('evenodd'); c.restore(); }
+  function hub(c) {
+    c.save(); c.translate(5, 9); disc(c, HUB, 'rgba(30,10,4,.5)'); c.restore();
+    goldBand(c, HUB - 12, HUB); ring(c, 101, HUB - 12, '#5c0f2c');
+    c.save(); c.globalCompositeOperation = 'screen'; c.globalAlpha = .4; ring(c, 101, HUB - 12, c.createPattern(glitter(), 'repeat')); c.restore();
+    goldBand(c, 95, 101);
+    for (let i = 0; i < 32; i++) { c.beginPath(); c.moveTo(0, 0); c.arc(0, 0, 95, i * TAU / 32, (i + 1) * TAU / 32); c.closePath(); c.fillStyle = i % 2 ? '#C4261F' : '#DC342C'; c.fill(); }
+    crescent(c, 95, 18, 26, 'rgba(255,240,215,.13)');
+    c.beginPath(); c.arc(0, 0, 95, 0, TAU); c.lineWidth = 1.5; c.strokeStyle = INK; c.stroke();
+    // Logo: our display face, slanted, flat gold with an inked offset shadow and a swash
+    c.save(); c.transform(1, 0, -.18, 1, 0, 0); c.textAlign = 'center'; c.textBaseline = 'middle'; c.lineJoin = 'round';
+    const lines = [['Rare', -20, 48], ['Hours', 25, 50]];
+    for (const [s, y, f] of lines) { heft(c, f, 3); c.fillStyle = INK; c.fillText(s, 3, y + 4); c.lineWidth = 3; c.strokeStyle = INK; c.strokeText(s, 0, y); }
+    for (const [s, y, f] of lines) { heft(c, f, 3); c.fillStyle = TITLE; htext(c, s, 0, y); }
+    c.restore();
+    c.beginPath(); c.moveTo(-56, 56); c.quadraticCurveTo(0, 45, 60, 54); c.lineCap = 'round'; c.lineWidth = 4.5; c.strokeStyle = INK; c.stroke(); c.lineWidth = 2; c.strokeStyle = TITLE; c.stroke();
+    spark(c, -64, -26, 6, 1); spark(c, 66, 8, 5, .9);
+  }
+  function makeBase() {
+    let c; [base, c] = layer(W, H); c.translate(CX, CY);
+    c.save(); c.translate(8, 16); disc(c, R + 56, 'rgba(18,4,10,.55)'); c.restore();
+    for (let i = 10; i > 0; i--) { c.save(); c.translate(0, i); disc(c, R + 55, i > 6 ? INK : G4); c.restore(); }
+    disc(c, R + 56, INK); goldBand(c, R + 41, R + 55);
+    ring(c, R + 17, R + 41, '#5c0f2c');
+    c.save(); c.globalCompositeOperation = 'screen'; c.globalAlpha = .45; ring(c, R + 17, R + 41, c.createPattern(glitter(), 'repeat')); c.restore();
+    goldBand(c, R + 5, R + 17); ring(c, R, R + 5, INK); disc(c, R, INK);
+  }
+  function makeOver() {
+    let c; [over, c] = layer(W, H); c.translate(CX, CY);
+    ring(c, R - 6, R, 'rgba(30,10,4,.35)');
+    crescent(c, R - 6, 70, 90, 'rgba(255,250,235,.11)');
+    hub(c);
+  }
+  function makeArt() { if (!bulbOn) { bulbOn = bulb(true); bulbOff = bulb(false); pegImg = makePeg(); } makeBase(); makeFace(); makeOver(); }
+  const PTR = [[-48, -34], [48, -34], [48, 0], [0, 76], [-48, 0]], PIN = [[-38, -25], [38, -25], [38, -4], [0, 61], [-38, -4]];
+  const PBULBS = (() => { const p = [[-30, -18], [30, -18], [30, -6], [0, 48], [-30, -6]], out = []; for (let i = 0; i < 5; i++) { const a = p[i], b = p[(i + 1) % 5], m = i === 0 ? 4 : i === 2 || i === 3 ? 3 : 1; for (let j = 0; j < m; j++) out.push([a[0] + (b[0] - a[0]) * j / m, a[1] + (b[1] - a[1]) * j / m]); } return out; })();
+  function pointer(c) {
+    c.setTransform(K, 0, 0, K, CX * K, 46 * K); c.rotate(flap); c.scale(1.2, 1.2);
+    c.save(); c.translate(4, 7); poly(c, PTR, 10); c.fillStyle = 'rgba(18,4,10,.55)'; c.fill(); c.restore();
+    poly(c, PTR, 10); c.fillStyle = G3; c.fill(); c.save(); c.clip(); c.fillStyle = G2; c.fillRect(-60, -50, 60, 150); c.restore();
+    poly(c, PTR, 10); c.lineWidth = 2; c.strokeStyle = INK; c.stroke();
+    poly(c, PIN, 7); c.fillStyle = '#5c0f2c'; c.fill();
+    c.save(); c.clip(); c.globalCompositeOperation = 'screen'; c.globalAlpha = .4; c.fillStyle = c.createPattern(glitter(), 'repeat'); c.fill(); c.restore();
+    c.lineWidth = 1.8; c.strokeStyle = INK; c.stroke();
+    PBULBS.forEach(([x, y], i) => c.drawImage(CALM || (i + blink) % 2 ? bulbOn : bulbOff, x - 12, y - 12, 24, 24));
+    // red tip that dips into the segments
+    const tip = [[-13, 54], [13, 54], [0, 88]];
+    poly(c, tip, 3); c.fillStyle = '#A81E1A'; c.fill(); c.save(); c.clip(); c.fillStyle = '#E8443A'; c.fillRect(-20, 50, 20, 50); c.restore();
+    poly(c, tip, 3); c.lineWidth = 2; c.strokeStyle = INK; c.stroke();
+    c.save(); c.translate(0, 14); c.beginPath(); for (let i = 0; i < 10; i++) { const a = i / 10 * TAU - Math.PI / 2, r = i % 2 ? 5 : 12; c.lineTo(Math.cos(a) * r, Math.sin(a) * r); } c.closePath();
+    c.fillStyle = G2; c.fill(); c.lineWidth = 1.4; c.strokeStyle = INK; c.stroke(); c.restore();
   }
   function draw() {
-    const c = cx; c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, 1100, 1140);
-    let g = c.createLinearGradient(390, 0, 710, 0); ['#140a06', '#4a2415', '#8a5230', '#4a2415', '#140a06'].forEach((x, i) => g.addColorStop(i / 4, x)); c.fillStyle = g;
-    c.beginPath(); c.moveTo(CX - 95, 980); c.lineTo(CX + 95, 980); c.quadraticCurveTo(CX + 110, 1090, CX + 200, 1132); c.lineTo(CX - 200, 1132); c.quadraticCurveTo(CX - 110, 1090, CX - 95, 980); c.fill();
-    for (let i = 30; i >= 0; i--) { c.setTransform(1, 0, 0, .985, CX, CY + i * 1.3); disc(c, R + 50, i > 26 ? '#140a06' : i > 8 ? '#3d2013' : '#5e351e'); }
-    c.setTransform(1, 0, 0, .985, CX, CY); disc(c, R + 50, metal(c, .6)); disc(c, R + 43, '#4a1119'); disc(c, R + 17, metal(c, 2.4)); disc(c, R + 6, '#140a06');
-    for (let i = 0; i < 48; i++) { const a = (i + .5) / 48 * TAU, on = CALM || (i + blink) % 3; c.save(); c.translate(Math.cos(a) * (R + 30), Math.sin(a) * (R + 30)); if (on) { const q = c.createRadialGradient(0, 0, 2, 0, 0, 19); q.addColorStop(0, '#ffe2b0cc'); q.addColorStop(1, '#ffb86000'); disc(c, 19, q); } disc(c, 7, on ? '#fff8e6' : '#8a5a36'); c.restore(); }
-    c.save(); c.rotate(angle); c.drawImage(face, -480, -480);
-    if (hitSeg >= 0) { const a = hitSeg * TAU / N - Math.PI / 2, w = TAU / N / 2; c.beginPath(); c.moveTo(0, 0); c.arc(0, 0, R, a - w, a + w); c.closePath(); c.fillStyle = '#ffffff40'; c.fill(); c.strokeStyle = '#fff'; c.lineWidth = 7; c.stroke(); }
-    for (let i = 0; i < N; i++) { const a = (i + .5) * TAU / N; c.save(); c.translate(Math.cos(a) * (R - 4), Math.sin(a) * (R - 4)); const q = c.createRadialGradient(-2, -2, 1, 0, 0, 7); q.addColorStop(0, '#fff'); q.addColorStop(1, '#7d8aa3'); disc(c, 6.5, q); c.restore(); }
+    if (!face) return;
+    const c = cx; c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, c.canvas.width, c.canvas.height);
+    c.drawImage(base, 0, 0);
+    c.setTransform(K, 0, 0, K, CX * K, CY * K);
+    c.save(); c.rotate(angle); c.drawImage(face, -FR, -FR, 2 * FR, 2 * FR);
+    if (hitSeg >= 0) {
+      const a = hitSeg * TAU / N - Math.PI / 2, w = TAU / N / 2, on = CALM || blink % 2;
+      wedge(c, a, w, HUB, R); c.fillStyle = `rgba(255,248,225,${on ? .42 : .2})`; c.fill();
+      c.lineJoin = 'round'; c.lineWidth = 8; c.strokeStyle = INK; c.stroke(); c.lineWidth = 4.5; c.strokeStyle = on ? G1 : G2; c.stroke();
+    }
     c.restore();
-    g = c.createRadialGradient(0, 0, R - 60, 0, 0, R); g.addColorStop(0, '#0000'); g.addColorStop(1, '#0007'); disc(c, R, g);
-    g = c.createLinearGradient(0, -R, 0, R); g.addColorStop(0, '#ffffff3d'); g.addColorStop(.45, '#ffffff00'); g.addColorStop(1, '#00000059'); disc(c, R, g);
-    c.save(); c.shadowColor = '#000c'; c.shadowBlur = 34; c.shadowOffsetY = 16; disc(c, 126, '#140a06'); c.restore(); disc(c, 126, metal(c, 1)); disc(c, 114, '#140a06');
-    g = c.createRadialGradient(-30, -45, 10, 0, 0, 125); g.addColorStop(0, '#8a5230'); g.addColorStop(1, '#2c150b'); disc(c, 110, g);
-    c.lineWidth = 3; c.strokeStyle = '#c9a14a'; c.beginPath(); c.arc(0, 0, 92, 0, TAU); c.stroke();
-    c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = '#f3dc98'; heft(c, 46, 3); htext(c, 'RARE', 0, -24); htext(c, 'HOURS', 0, 26);
-    c.setTransform(1, 0, 0, 1, CX, 42); c.save(); c.shadowColor = '#000b'; c.shadowBlur = 14; c.shadowOffsetY = 8; c.rotate(flap);
-    g = c.createLinearGradient(-20, 0, 20, 0); g.addColorStop(0, '#fff6dd'); g.addColorStop(.5, '#f4ecd8'); g.addColorStop(1, '#a99a78'); c.fillStyle = g;
-    c.beginPath(); c.moveTo(-19, 0); c.lineTo(19, 0); c.lineTo(0, 130); c.closePath(); c.fill(); c.restore();
-    g = c.createLinearGradient(0, -32, 0, 32); g.addColorStop(0, '#f7e6ae'); g.addColorStop(1, '#7a5a1c'); c.fillStyle = g; c.fillRect(-46, -32, 92, 50); c.strokeStyle = '#3d2c0c'; c.lineWidth = 3; c.strokeRect(-46, -32, 92, 50); disc(c, 9, '#3d2c0c'); c.setTransform(1, 0, 0, 1, 0, 0);
+    for (let i = 0; i < N; i++) { const a = angle + (i + .5) * TAU / N - Math.PI / 2; c.drawImage(pegImg, Math.cos(a) * (R - 10) - 12, Math.sin(a) * (R - 10) - 12, 24, 24); }
+    c.setTransform(1, 0, 0, 1, 0, 0); { const x = (CX - R - 2) * K | 0, y = (CY - R - 2) * K | 0, d = (2 * R + 4) * K | 0; c.drawImage(over, x, y, d, d, x, y, d, d); } c.setTransform(K, 0, 0, K, CX * K, CY * K);
+    for (let i = 0; i < 48; i++) { const a = (i + .5) / 48 * TAU; c.drawImage(CALM || (i + blink) % 3 ? bulbOn : bulbOff, Math.cos(a) * (R + 29) - 18, Math.sin(a) * (R + 29) - 18, 36, 36); }
+    for (let i = 0; i < 24; i++) { const a = (i + .5) / 24 * TAU; c.drawImage(CALM || (i + blink) % 2 ? bulbOn : bulbOff, Math.cos(a) * 111.5 - 12, Math.sin(a) * 111.5 - 12, 24, 24); }
+    if (!CALM) for (let i = 0; i < 5; i++) { const h = hsh(i * 7919 + blink * 104729), a = h * TAU, r = i < 3 ? R + 48 - (i % 2) * 37 : R + 29; spark(c, Math.cos(a) * r, Math.sin(a) * r, 6 + hsh(h * 1e9 | 0) * 5, .95); }
+    pointer(c);
+    c.setTransform(1, 0, 0, 1, 0, 0);
   }
   // Server dictates the landing field and the duration (3 to 7 s); we animate toward it.
   let spinKey = null, spinRaf = 0;
@@ -164,7 +313,7 @@ const RH = (() => {
     zoom(1);
     const stepF = () => {
       const p = Math.min(1, (performance.now() - t0) / remain); angle = from + dist * (1 - Math.pow(1 - p, 3.4));
-      const s = Math.floor(angle / (TAU / N) + .5); flap *= .8; if (seg !== null && s !== seg) { flap = .45; tone(850, .03, .03); } seg = s; blink = Math.floor(p * 40);
+      const s = Math.floor(angle / (TAU / N) + .5); flap *= .8; if (seg !== null && s !== seg) { flap = .26; tone(850, .03, .03); } seg = s; blink = Math.floor(p * 40);
       if (!close && remain - (performance.now() - t0) <= Math.max(1300, remain * .45)) { close = true; zoom(2); }
       if (p >= 1) { flap = 0; angle %= TAU; hitSeg = sp.idx; draw(); return; }
       draw(); spinRaf = requestAnimationFrame(stepF);
@@ -176,7 +325,15 @@ const RH = (() => {
   let chip = 5, myTot = 0, pendingRepeat = false, lastPhase = null, lastRound = -1, lastWinShown = null;
   function setupTable() {
     cx = $('wheel').getContext('2d');
-    $('street').innerHTML = KEYS.map(k => { const t = TYPES[k]; return `<button class="house ${t.pay ? '' : 'bonus'}" id="h-${k}" style="--c:${t.c};--t:${t.t}" aria-label="Bet on ${t.n}"><span class="dots"></span><span class="n">${t.n}</span><span class="p">${t.pay ? t.pay + ' : 1' : 'Bonus'}</span><span class="stake"></span></button>`; }).join('');
+    // Desk: raffle tickets, numbers left and bonuses right, each 2x2 group with a chip stack badge in the middle
+    const ticket = k => {
+      const t = TYPES[k], s = SKIN[k], i = KEYS.indexOf(k);
+      if (t.pay) return `<button class="house num" id="h-${k}" style="--tk:${s.tk};--pl:${s.pl};--i:${i}" aria-label="Bet on ${t.n}, pays ${t.pay} to 1"><span class="tk"><span class="stub"></span><span class="face"><span class="plq"><span class="n">${t.n}</span></span><span class="p">Pays ${t.pay}x</span></span></span><span class="dots"></span><span class="stake"></span></button>`;
+      const name = esc(t.n).replace('Productivitime', 'Producti&shy;vitime'), long = s => Math.max(...s.split(' ').map(w => w.length));
+      return `<button class="house bonus" id="h-${k}" style="--tk:${s.tk};--i:${i};--fs:${Math.min(32, 180 / long(t.n)).toFixed(1)};--fsm:${Math.min(32, 200 / long(name.replace('&shy;', ' '))).toFixed(1)}" aria-label="Bet on bonus game ${t.n}"><span class="tk"><span class="stub">${medal(k)}</span><span class="face"><span class="ttl"><span class="n">${name}</span></span><span class="p">Bonus<i> game</i></span></span></span><span class="dots"></span><span class="stake"></span></button>`;
+    };
+    const badge = `<span class="medal" aria-hidden="true">${STACK_BADGE}</span>`;
+    $('street').innerHTML = `<div class="tgrp">${KEYS.filter(k => TYPES[k].pay).map(ticket).join('')}${badge}</div><div class="tgrp">${BONUS_KEYS.map(ticket).join('')}${badge}</div>`;
     KEYS.forEach(k => { $('h-' + k).onclick = () => placeBet(k); $('h-' + k).oncontextmenu = e => { e.preventDefault(); send({ t: 'unbet', key: k }); }; });
     $('quay').innerHTML = '<div class="info">' + [['bal', 'Balance'], ['bet', 'Total bet'], ['win', 'Win']].map(([i, t]) => `<div><small>${t}</small><b>${ORRA}<span id="${i}">0</span></b></div>`).join('') + '</div><div class="chips">' + COINS.map(c => `<button class="coin" data-v="${c[0]}" aria-label="Chip ${c[0]} Orra">${chipSvg(c)}</button>`).join('') + '</div><div class="acts"><button class="btn" id="clear">Clear</button><button class="btn" id="again">Repeat</button><button class="btn go" id="go">Ready</button></div>';
     document.querySelectorAll('.coin').forEach(b => b.onclick = () => { chip = +b.dataset.v; renderChips(); });
@@ -239,7 +396,7 @@ const RH = (() => {
 <li>Pick a chip, then click a field. Click again to stack more. Right-click a field to remove your bet.</li>
 <li>Your balance is in Orra ${ORRA}. Your level sets the maximum bet per round.</li>
 <li>Prime Minute: each round one field gets a x2, x3 or x5 boost on its winnings.</li></ul>
-<div class="pays">${KEYS.map(k => { const t = TYPES[k]; return `<div style="--c:${t.c}">${t.n}<small>${t.pay ? 'pays ' + t.pay + ' : 1' : 'Bonus game'}</small></div>`; }).join('')}</div></section>
+<div class="pays">${KEYS.map(k => { const t = TYPES[k]; return `<div style="--c:${SKIN[k].f}">${t.n}<small>${t.pay ? 'pays ' + t.pay + ' : 1' : 'Bonus game'}</small></div>`; }).join('')}</div></section>
 <section class="rsec"><h3>Bonus games</h3><ul>
 <li>Backers (players who bet on the field before the spin) always play, with the full edge: full multiplier, Prime Minute boost, the first turns and an Edge Shield against late joiners.</li>
 <li>Everyone else gets a short buy-in window. You can buy in for up to 25% to 50% of the top backer's stake (more when more of the table backed it). Late joiners collect 60% of their multiplier.</li>
@@ -257,10 +414,10 @@ const RH = (() => {
     if (m.dev) window.RHforce = (key, game) => send({ t: 'force', key, game });
     players = {}; m.players.forEach(p => players[p.id] = p);
     if (first) {
-      $('lobby').hidden = true; $('game').hidden = false; setupTable(); renderChips(); makeFace(); draw();
+      $('lobby').hidden = true; $('game').hidden = false; setupTable(); renderChips(); makeArt(); draw();
       history.replaceState(null, '', location.pathname + '?join=' + m.code);
       try { sessionStorage.setItem('rh-room', m.code); } catch {}
-      if (document.fonts) document.fonts.ready.then(() => { makeFace(); draw(); });
+      if (document.fonts) document.fonts.ready.then(() => { makeArt(); draw(); });
     }
     const me = players[m.you], betting = m.phase === 'betting', ready = me.ready;
     $('room').textContent = m.code; $('lvl').innerHTML = `<b>Level ${m.me.lvl}<small>${fmt(m.me.xp)} / ${fmt(m.me.need)} XP</small></b><span class="meter"><i style="width:${Math.min(100, m.me.xp / m.me.need * 100)}%"></i></span>`;
@@ -278,7 +435,7 @@ const RH = (() => {
     KEYS.forEach(k => {
       const h = $('h-' + k); h.disabled = !betting || ready;
       h.classList.toggle('lit', !!mine[k]);
-      h.querySelector('.stake').innerHTML = mine[k] ? stackHtml(mine[k]) + `<b>${fmt(mine[k])}</b>` : '';
+      h.querySelector('.stake').innerHTML = mine[k] ? stackHtml(mine[k]) + `<b>${ORRA}${fmt(mine[k])}</b>` : '';
       h.querySelector('.dots').innerHTML = m.players.filter(p => p.id !== m.you && p.bets[k]).map(p => `<i style="--c:${p.color}" title="${esc(p.name)}: ${p.bets[k]}"></i>`).join('');
       const b = h.querySelector('.boost'); if (b) b.remove();
       if (m.boost && m.boost.k === k) h.insertAdjacentHTML('beforeend', `<span class="boost">x${m.boost.m}</span>`);
@@ -293,7 +450,7 @@ const RH = (() => {
     if (m.phase === 'betting' || m.phase === 'intro' || m.phase === 'bonus') zoom(0);
     if (m.phase === 'betting' && lastPhase !== 'betting') { hitSeg = -1; draw(); document.body.classList.remove('won'); $('win').textContent = '0'; $('win').parentNode.classList.remove('up'); }
     // history
-    $('hist').innerHTML = m.hist.slice(0, 10).map(k => { const t = TYPES[k]; return `<span style="background:${t.c};color:${t.t}" title="${t.n}">${t.pay ? t.n : t.n.split(' ').map(w => w[0]).join('')}</span>`; }).join('');
+    $('hist').innerHTML = m.hist.slice(0, 10).map(k => { const t = TYPES[k]; return `<span class="${t.pay ? '' : 'bh'}" style="background:${SKIN[k].f};color:${t.pay ? SKIN[k].pl : '#FFE38A'}" title="${t.n}">${t.pay ? t.n : t.n.split(' ').map(w => w[0]).join('')}</span>`; }).join('');
     // messages and payouts
     let msg = m.msg;
     if (m.phase === 'payout' && m.results) {
