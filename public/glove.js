@@ -643,18 +643,19 @@ const Glove = (() => {
     },
     async fistPump(c, d = {}) {
       await show(c, { pose: 'fist', which: 'knuck', ang: -PI / 2, yaw: rnd(1, 1.4) * sgn(), pitch: 0, z: .55, over: d.over, speed: 1200 });
-      const n = 2 + Math.floor(rnd(0, 3)); st.agit = Math.min(1, st.agit + .1);
+      const n = 2 + Math.floor(rnd(0, 3)); st.agit = Math.min(1, st.agit + .1); if (chance(.6)) c.snd('glove-clench', { vol: .7 });
       for (let i = 0; i < n; i++) { await c.go(rig.x.t, rig.y.t - S0 * .7, { dur: 110, path: 'direct', ease: 'out', k: 700, bank: 0 }); c.scale(1.1, 500); await c.go(rig.x.t, rig.y.t + S0 * .7, { dur: 150, path: 'direct', k: 400, bank: 0 }); c.scale(1, 200); }
       await c.wait(300);
     },
     async jazz(c, d = {}) {
       await show(c, { pose: 'splay', which: 'middle', ang: -PI / 2 + rnd(-.4, .4), yaw: PI + rnd(-.2, .2), pitch: .2, z: .7, over: d.over, speed: 1300 });
-      c.trem(1.4); c.scale(1.08, 200);
+      c.trem(1.4); c.scale(1.08, 200); c.snd('glove-jazz', { hold: true, vol: .85 + st.agit * .25, rate: 1 + (Math.random() - .5) * .04 });
       const r0 = rig.roll.t; await c.tween(rnd(900, 1300), u => rig.roll.to(r0 + Math.sin(u * TAU * 5) * .18, 500), E.lin);
       c.trem(0); c.scale(1, 100); await c.wait(250);
     },
     async shrug(c, d = {}) {
       await show(c, { pose: 'open', which: 'mid', ang: -PI / 2 + rnd(-.6, .6), yaw: PI, pitch: -rnd(.9, 1.2), z: .45, over: d.over });
+      c.snd('glove-shrug', { vol: d.over ? .8 : 1 });
       await bob(c, 1, -S0 * .45, 200);
       await rock(c, 2, .16, 220, rig.roll.t); await c.wait(rnd(200, 500));
     },
@@ -670,7 +671,8 @@ const Glove = (() => {
     },
     async wave(c, d = {}) {
       await show(c, { pose: 'open', which: 'middle', ang: -PI / 2, yaw: PI + rnd(-.25, .25), pitch: rnd(0, .2), z: .5, over: d.over });
-      await rock(c, 3, rnd(.25, .4), rnd(170, 230), rig.roll.t); await c.wait(200);
+      const sp = rnd(170, 230); c.snd('glove-wave', { hold: true, rate: 200 / sp });
+      await rock(c, 3, rnd(.25, .4), sp, rig.roll.t); await c.wait(200);
     },
     async snapPoint(c, d = {}) {
       await show(c, { pose: 'snap', which: 'mid', ang: -PI / 2 + rnd(-.3, .3), yaw: rnd(.5, 1) * sgn(), pitch: .1, z: .5, over: d.over });
@@ -684,6 +686,8 @@ const Glove = (() => {
     async rubMoney(c, d = {}) {
       await show(c, { pose: 'rub', which: 'tips', ang: -PI / 2 + rnd(-.4, .4), yaw: PI * rnd(.7, .9) * sgn(), pitch: .15, z: .5, over: d.over });
       const n = 8 + Math.floor(rnd(0, 6));
+      c.snd('glove-rubmoney', { hold: true, vol: .8 + st.agit * .3 });
+      if (n > 10) c.snd('glove-rubmoney', { hold: true, vol: .6, delay: 480, force: true });
       for (let i = 0; i < n; i++) { c.thumb([i % 2 ? .45 : .8, .95], 700); await c.wait(70); }
       await c.wait(200);
     },
@@ -742,7 +746,7 @@ const Glove = (() => {
     async quickThumb(c) { await show(c, { pose: 'thumb', which: 'thumb', ang: -PI / 2, yaw: PI + rnd(-.6, .6), pitch: .1, z: .4, speed: 1300 }); await bob(c, 1, -S0 * .3, 110); await c.wait(250); },
     async quickOk(c) { await show(c, { pose: 'ok', which: 'middle', ang: -PI / 2, yaw: PI, pitch: .1, z: .4, speed: 1300 }); await c.wait(500); },
     async peace(c, d = {}) { await show(c, { pose: 'peace', which: 'middle', ang: -PI / 2 + rnd(-.3, .3), yaw: any([0, PI]), pitch: .1, z: .5, over: d.over }); await bob(c, 1, -S0 * .2, 140); await c.wait(500); },
-    async countUp(c) { await show(c, { pose: 'n1', which: 'middle', ang: -PI / 2, yaw: PI, pitch: 0, z: .5 }); for (let n = 1; n <= 5; n++) { c.pose('n' + n, 260); c.scale(1.08, 400); await c.wait(150); c.scale(1, 200); await c.wait(140); } await c.wait(300); },
+    async countUp(c) { await show(c, { pose: 'n1', which: 'middle', ang: -PI / 2, yaw: PI, pitch: 0, z: .5 }); for (let n = 1; n <= 5; n++) { c.pose('n' + n, 260); c.snd('glove-count', { file: 'glove-count-' + Math.min(3, n), rate: n > 3 ? 1 + (n - 3) * .07 : 1 }); c.scale(1.08, 400); await c.wait(150); c.scale(1, 200); await c.wait(140); } await c.wait(300); },
     // ---- middle finger: explicit, held, many deliveries
     async middleSlow(c) {
       c.over(true); c.pose('fist', 120);
@@ -790,7 +794,8 @@ const Glove = (() => {
       await show(c, { pose: 'open', which: 'mid', ang: -PI / 2, yaw: PI * .9, pitch: -.4, z: .5 });
       const x = rig.x.t, y = rig.y.t;
       await c.go(x + S0 * 1.4, y - S0 * .8, { dur: 500, path: 'arc' }); await c.go(x - S0 * 1.2, y + S0 * .4, { dur: 700, path: 'arc', side: 1 });
-      c.pose('limp', 80); c.orient(rig.roll.t + .9, null, -.6, 50); await c.go(x, y + S0, { dur: 700, path: 'arc' }); await c.wait(700);
+      c.pose('limp', 80); c.orient(rig.roll.t + .9, null, -.6, 50); c.snd('glove-bow', { hold: true });
+      await c.go(x, y + S0, { dur: 700, path: 'arc' }); await c.wait(700);
     },
   };
 
@@ -1142,6 +1147,7 @@ const Glove = (() => {
       const w = wheel(); if (!w) return;
       c.pose('fist', 120); const s = sgn(); c.orient(s * .4, s * 1.1, 0, 60);
       await c.goPt('mid', w.x + s * w.r * 1.25, w.y - w.r * rnd(.1, .5), { speed: 700, z: .25, path: pathPick() });
+      c.snd('glove-clench', { hold: true, vol: .8 + st.agit * .4 });
       await c.tween(1e5, () => rig.trem.to(clamp(1 - (st.spinEnd - now()) / 4000, .05, .9), 40), E.lin);
     },
     async mimic(c) {
@@ -1230,7 +1236,7 @@ const Glove = (() => {
     await c.goPt('mid', r.left + r.width * rnd(.3, .7), r.top - S0 * 1.6, { speed: 1000, z: .5, path: pathPick() });
     for (const n of [3, 2, 1]) {
       await c.until(() => st.endsAt - Date.now() < n * 1000 + 300, 3000);
-      c.pose('n' + n, 500); c.scale(1.12, 500); await c.wait(120); c.scale(1, 200);
+      c.pose('n' + n, 500); c.snd('glove-count', { file: 'glove-count-' + (4 - n), vol: .85 + (3 - n) * .1 }); c.scale(1.12, 500); await c.wait(120); c.scale(1, 200);
     }
     await c.until(() => false, 1500);
   }

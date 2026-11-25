@@ -22,6 +22,24 @@ const RH = (() => {
   let sound = store.get('rh-sound') !== 'off'; Sfx.on = sound;
   const tone = (f, d = .08, v = .05) => Sfx.tone(f, d, v);
   const sfx = (n, v = .8, o = {}) => Sfx.play(n, { vol: v / .8, ...o });
+  // Urgent countdown: one tick per second over the last n seconds. It escalates: woodblock first, tighter and louder,
+  // a stopwatch layer joins at 2, the modern tick marks the final second. Ticks alternate a little left/right (tick, tock).
+  // A tick only plays right at its second boundary, so a hidden tab or a lag spike never fires a late or doubled tick.
+  const countdown = () => {
+    let key = '', prev = 1e9;
+    return (id, left, n, vol = 1) => {
+      const sec = Math.ceil(left / 1000);
+      if (id !== key) { key = id; prev = sec; return; }
+      if (sec === prev) return;
+      const fresh = sec < prev && left > sec * 1000 - 260 && sec >= 1 && sec <= n; prev = sec;
+      if (!fresh) return;
+      const u = n > 1 ? (n - sec) / (n - 1) : 1, pan = sec % 2 ? -.18 : .18;
+      if (sec > 1) Sfx.play('tick-wood', { vol: vol * (.55 + u * .45), rate: 1 + u * .12, pan, force: true });
+      if (sec === 2) Sfx.play('tick-stopwatch', { vol: vol * .75, pan: -pan, force: true, delay: 15 });
+      if (sec === 1) { Sfx.play('tick-modern', { vol: vol * 1.05, force: true }); Sfx.play('tick-wood', { vol: vol * .5, rate: 1.18, pan, force: true }); }
+    };
+  };
+  const betTick = countdown(), buyTick = countdown(), bonusTick = countdown();
 
   // ---- Connection ----
   let ws = null, token = store.get('rh-token') || '', myName = store.get('rh-name') || '', roomCode = null, off = 0, bestRtt = 1e9;
@@ -256,7 +274,8 @@ const RH = (() => {
     for (let i = 0; i < 32; i++) { c.beginPath(); c.moveTo(0, 0); c.arc(0, 0, 95, i * TAU / 32, (i + 1) * TAU / 32); c.closePath(); c.fillStyle = i % 2 ? '#C4261F' : '#DC342C'; c.fill(); }
     crescent(c, 95, 18, 26, 'rgba(255,240,215,.13)');
     c.beginPath(); c.arc(0, 0, 95, 0, TAU); c.lineWidth = 1.5; c.strokeStyle = INK; c.stroke();
-    // Logo: our display face, slanted, flat gold with an inked offset shadow and a swash
+    if (hubLogo) return;
+    // Fallback until the logo image is decoded: our display face, slanted, flat gold with an inked offset shadow and a swash
     c.save(); c.transform(1, 0, -.18, 1, 0, 0); c.textAlign = 'center'; c.textBaseline = 'middle'; c.lineJoin = 'round';
     const lines = [['Gekke', -20, 44], ['Tijd', 25, 52]];
     for (const [s, y, f] of lines) { heft(c, f, 3); c.fillStyle = INK; c.fillText(s, 3, y + 4); c.lineWidth = 3; c.strokeStyle = INK; c.strokeText(s, 0, y); }
@@ -280,6 +299,20 @@ const RH = (() => {
     crescent(c, R - 6, 70, 90, 'rgba(255,250,235,.11)');
     hub(c);
   }
+  // The game logo sits on the hub, over the inner bulb ring. Pre-rendered once at its drawn size, with an inked drop shadow.
+  const LOGO_W = 232, LOGO_H = LOGO_W * 598 / 1008;
+  let hubLogo = null;
+  (() => {
+    const im = new Image(); im.decoding = 'async';
+    im.onload = () => {
+      const pad = 14, [e, c] = layer(LOGO_W + pad * 2, LOGO_H + pad * 2);
+      c.shadowColor = 'rgba(18,4,10,.6)'; c.shadowOffsetX = 3 * K; c.shadowOffsetY = 6 * K; c.shadowBlur = 6 * K;
+      c.imageSmoothingQuality = 'high'; c.drawImage(im, pad, pad, LOGO_W, LOGO_H);
+      hubLogo = { e, pad };
+      if (face) { makeOver(); draw(); }
+    };
+    im.src = 'img/logo.webp';
+  })();
   function makeArt() { if (!bulbOn) { bulbOn = bulb(true); bulbOff = bulb(false); pegImg = makePeg(); } makeBase(); makeFace(); makeOver(); }
   const PTR = [[-48, -34], [48, -34], [48, 0], [0, 76], [-48, 0]], PIN = [[-38, -25], [38, -25], [38, -4], [0, 61], [-38, -4]];
   const PBULBS = (() => { const p = [[-30, -18], [30, -18], [30, -6], [0, 48], [-30, -6]], out = []; for (let i = 0; i < 5; i++) { const a = p[i], b = p[(i + 1) % 5], m = i === 0 ? 4 : i === 2 || i === 3 ? 3 : 1; for (let j = 0; j < m; j++) out.push([a[0] + (b[0] - a[0]) * j / m, a[1] + (b[1] - a[1]) * j / m]); } return out; })();
@@ -315,6 +348,7 @@ const RH = (() => {
     c.setTransform(1, 0, 0, 1, 0, 0); { const x = (CX - R - 2) * K | 0, y = (CY - R - 2) * K | 0, d = (2 * R + 4) * K | 0; c.drawImage(over, x, y, d, d, x, y, d, d); } c.setTransform(K, 0, 0, K, CX * K, CY * K);
     for (let i = 0; i < 48; i++) { const a = (i + .5) / 48 * TAU; c.drawImage(CALM || (i + blink) % 3 ? bulbOn : bulbOff, Math.cos(a) * (R + 29) - 18, Math.sin(a) * (R + 29) - 18, 36, 36); }
     for (let i = 0; i < 24; i++) { const a = (i + .5) / 24 * TAU; c.drawImage(CALM || (i + blink) % 2 ? bulbOn : bulbOff, Math.cos(a) * 111.5 - 12, Math.sin(a) * 111.5 - 12, 24, 24); }
+    if (hubLogo) { const p = hubLogo.pad; c.drawImage(hubLogo.e, -LOGO_W / 2 - p, -LOGO_H / 2 - p - 2, LOGO_W + p * 2, LOGO_H + p * 2); }
     if (!CALM) for (let i = 0; i < 5; i++) { const h = hsh(i * 7919 + blink * 104729), a = h * TAU, r = i < 3 ? R + 48 - (i % 2) * 37 : R + 29; spark(c, Math.cos(a) * r, Math.sin(a) * r, 6 + hsh(h * 1e9 | 0) * 5, .95); }
     pointer(c);
     c.setTransform(1, 0, 0, 1, 0, 0);
@@ -377,7 +411,11 @@ const RH = (() => {
     $('go').onclick = () => { send({ t: 'ready' }); tone(660, .15); if (G_) G_.emit('ready'); };
     $('help').onclick = () => { rulesDialog(); $('rules').showModal(); };
     $('shop').onclick = () => { shop(); $('work').showModal(); };
-    const sndLabel = () => { $('snd').textContent = 'Sound ' + (sound ? 'on' : 'off'); $('snd').setAttribute('aria-pressed', sound); };
+    // Speaker icon with waves (on) or with a cross (off)
+    const SPK = '<path d="M3.5 9.2h3.6L12 5v14l-4.9-4.2H3.5z" fill="currentColor" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>';
+    const ICON_ON = `<svg viewBox="0 0 24 24" aria-hidden="true">${SPK}<path d="M15.2 9.1a4.2 4.2 0 0 1 0 5.8M17.8 6.6a7.8 7.8 0 0 1 0 10.8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`;
+    const ICON_OFF = `<svg viewBox="0 0 24 24" aria-hidden="true">${SPK}<path d="M15.6 9.4l5.2 5.2M20.8 9.4l-5.2 5.2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`;
+    const sndLabel = () => { const b = $('snd'); b.innerHTML = sound ? ICON_ON : ICON_OFF; b.setAttribute('aria-pressed', sound); b.setAttribute('aria-label', sound ? 'Sound on, click to mute' : 'Sound off, click to unmute'); b.title = sound ? 'Mute' : 'Unmute'; b.classList.toggle('muted', !sound); };
     sndLabel(); $('snd').onclick = () => { sound = !sound; Sfx.on = sound; store.set('rh-sound', sound ? 'on' : 'off'); sndLabel(); if (sound) sfx('token_place', .5); };
     ['rules', 'work'].forEach(id => $(id).onclick = e => { if (e.target === $(id)) $(id).close(); });
     $('invite').onclick = () => {
@@ -410,6 +448,8 @@ const RH = (() => {
       const el = $('clock').firstChild;
       const left = S.phase === 'betting' && S.ends ? S.ends - now() : 0;
       el.style.width = Math.max(0, Math.min(100, left / (S.cfg ? S.cfg.bet * 10 : 80))) + '%'; $('clock').classList.toggle('low', left > 0 && left < 3000);
+      // betting countdown: last 5 s (3 s on short rounds), softer once you pressed Ready
+      if (left > 0) betTick('r' + S.round, left, S.cfg && S.cfg.bet < 10 ? 3 : 5, players[S.you] && players[S.you].ready ? .6 : 1);
     }
     Bonus.tick();
     requestAnimationFrame(clockLoop);
@@ -438,7 +478,7 @@ const RH = (() => {
     $('w3').onclick = () => { send({ t: 'cashier', op: 'daily' }); sfx('token_place'); Sfx.play('coin-stream', { delay: 80 }); Sfx.play('game-show', { vol: .7, delay: 120 }); };
   }
   function rulesDialog() {
-    let h = `<section class="rsec"><h3>The table</h3><ul class="brules">
+    let h = `<div class="rgrid"><div class="rcol"><section class="rsec"><h3>The table</h3><ul class="brules">
 <li><b>Bet:</b> pick a chip, click a field. Click again to add more. Right-click removes your bet.</li>
 <li><b>Group:</b> the chip stack between each group of 4 bets your chip on all 4.</li>
 <li><b>Time:</b> ${S && S.cfg ? S.cfg.bet : 8} seconds per round. The wheel spins early once everyone presses Ready.</li>
@@ -450,9 +490,9 @@ const RH = (() => {
 <li><b>Backers</b> (bet on the field) always play: full multiplier, Prime Minute boost, first turn, and an Edge Shield against late joiners.</li>
 <li><b>Late buy-in:</b> everyone else can join for 25% to 50% of the top backer's stake. Late joiners get 60% of their multiplier.</li>
 <li><b>Payout:</b> your final multiplier times your stake, plus your stake back.</li>
-<li><b>Items:</b> Shields and Swap tokens carry over between games.</li></ul></section>`;
-    for (const k of BONUS_KEYS) h += `<section class="rsec" style="--accent:${ACCENT[k]}"><h3><span class="cat">${CAT_NAMES[k]}</span></h3><p class="note">1 of these 4, picked at random.</p><div class="gl">${(catalog[k] || []).map(g => `<details><summary>${esc(g.name)}</summary><ul class="brules">${g.rules.map(ruleLi).join('')}</ul></details>`).join('')}</div></section>`;
-    h += '<p class="note">Orra is play money with no real value.</p>';
+<li><b>Items:</b> Shields and Swap tokens carry over between games.</li></ul></section></div><div class="rcol"><p class="note">Each bonus field plays 1 of its 4 games, picked at random.</p>`;
+    for (const k of BONUS_KEYS) h += `<section class="rsec" style="--accent:${ACCENT[k]}"><h3><span class="cat">${CAT_NAMES[k]}</span></h3><div class="gl">${(catalog[k] || []).map(g => `<details><summary>${esc(g.name)}</summary><ul class="brules">${g.rules.map(ruleLi).join('')}</ul></details>`).join('')}</div></section>`;
+    h += '</div></div><p class="note">Orra is play money with no real value.</p>';
     $('rulebody').innerHTML = h;
   }
   // 'Label: text' renders the label in bold so rules scan fast.
@@ -561,10 +601,11 @@ const RH = (() => {
     const rulesList = rules => `<ul class="brules">${rules.map(ruleLi).join('')}</ul>`;
     const accent = cat => box().style.setProperty('--accent', ACCENT[cat] || 'var(--gold)');
     // Intro doubles as the buy-in window. Built once per round, then patched so the slider keeps its value.
-    let introKey = '';
+    let introKey = '', buyWin = null;
     function intro(m) {
       const n = m.next, k = m.round + ':' + n.id, backer = n.backers.includes(m.you), late = n.late.includes(m.you);
       accent(n.cat);
+      buyWin = n.cap ? { k, ends: m.ends, can: () => { const b = box().querySelector('.badge'); return !!b && b.classList.contains('watch'); } } : null;
       if (introKey !== k) {
         introKey = k; cur = null; last = null;
         const dur = Math.max(500, m.ends - now());
@@ -623,13 +664,15 @@ const RH = (() => {
     }
     function fx(m) { if (!inst || !last || last.id !== m.g || !G[m.g] || !G[m.g].fx) return; try { G[m.g].fx(inst.el, inst.st, m.d, api(last)); } catch (e) { console.error(e); } }
     function tick() {
+      if (buyWin && !last && $('bonus').classList.contains('on')) { const l = buyWin.ends - now(); if (l > 0 && buyWin.can()) buyTick(buyWin.k, l, 3, .7); }
       if (!last || !$('bonus').classList.contains('on')) return;
       const left = last.ends ? Math.max(0, last.ends - now()) : 0, bt = box().querySelector('.bhead .bt i'), clk = box().querySelector('.bclock');
       if (bt) bt.style.width = left ? Math.min(100, left / span.tot * 100) + '%' : '0';
       if (clk) {
         clk.hidden = !left || !!box().querySelector('.final');
         const sec = Math.ceil(left / 1000), b = clk.firstChild;
-        if (b.textContent !== String(sec)) { b.textContent = sec; if (left && sec <= 3 && last.part) tone(980, .05, .03); }
+        if (b.textContent !== String(sec)) b.textContent = sec;
+        if (left && last.part) bonusTick(cur, left, 3, .8);
         clk.classList.toggle('low', left > 0 && left <= 3000);
       }
       if (inst && G[last.id] && G[last.id].frame) try { G[last.id].frame(inst.el, inst.st, last.v, api(last)); } catch (e) { console.error(e); }
@@ -644,7 +687,7 @@ const RH = (() => {
         <button class="btn go" id="bclose">Back to the table</button></div></div>`);
       const b = $('bclose'); if (b) { b.onclick = close; b.focus(); }
     }
-    function close() { $('bonus').classList.remove('on'); cur = null; inst = null; last = null; introKey = ''; }
+    function close() { $('bonus').classList.remove('on'); cur = null; inst = null; last = null; introKey = ''; buyWin = null; }
     return { intro, update, fx, tick, results, close };
   })();
 
