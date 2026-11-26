@@ -130,7 +130,7 @@ const Glove = (() => {
   function setThumb(t, k = 200) { t.forEach((v, j) => v != null && rig.P[16 + j].to(v, k)); }
 
   // ---------------------------------------------------------------- Page state
-  let A = null, cv, g, fxc, fg, Hb, hb, Cb, cb, dpr = 1, W = 1, Hh = 1, S0 = 60, T = 0, lastT = 0, started = false, HAS_FILTER = false;
+  let A = null, cv, g, fxc, fg, Hb, hb, Cb, cb, dpr = 1, W = 1, Hh = 1, S0 = 60, T = 0, lastT = 0, started = false, hidden = false, HAS_FILTER = false;
   let fxDirty = false, layer = '', lastSk = null, lastPos = [0, 0];
   const st = { phase: 'betting', round: -1, endsAt: 0, allReady: false, agit: .25, prepRound: -2, countRound: -2, spinT0: 0, spinA0: 0, spinEnd: 0, spinPlan: null, lastReact: 0, players: 0, overlay: false };
   const $ = s => document.querySelector(s);
@@ -537,6 +537,7 @@ const Glove = (() => {
   // ---------------------------------------------------------------- Frame loop
   function frame(ts) {
     requestAnimationFrame(frame);
+    if (hidden) { lastT = 0; return; }
     const t = ts / 1000, dt = Math.min(.05, Math.max(.001, t - (lastT || t))); lastT = t; T = t;
     const tn = now();
     for (let i = waits.length - 1; i >= 0; i--) {
@@ -1492,7 +1493,7 @@ const Glove = (() => {
   const PRI = { briefReady: 3, briefGo: 4, poked: 3, bonusLoss: 5, bonusWin: 5, win: 5, bigwin: 5, loss: 5, nobet: 4, levelUp: 4, landedBonus: 4, refused: 3, ready: 3, round: 2, bet: 2, join: 2, leave: 2, bonusWatch: 4 };
   const MOOD = { win: [-.1, .3], bigwin: [.2, .6], loss: [.35, -.2], bonusLoss: [.45, -.3], refused: [.25, 0], bonusWin: [0, .5] };
   function react(type, d = {}) {
-    if (!started || CALM && /punch/.test(type)) return;
+    if (!started || hidden || CALM && /punch/.test(type)) return;
     const list = REACT[type]; if (!list) return;
     const m = MOOD[type]; if (m) st.agit = clamp(st.agit + m[0], 0, 1);
     const pri = PRI[type] || 2;
@@ -1592,7 +1593,7 @@ const Glove = (() => {
   }
   // Called when the server starts a spin. Returns how long the page should wait before the wheel moves, and its shape.
   function spin(sp, remain) {
-    if (!started || CALM) return { delay: 0, shape: r => spinShape(null, r) };
+    if (!started || hidden || CALM) return { delay: 0, shape: r => spinShape(null, r) };
     st.spinT0 = 0;
     let plan = st.spinPlan, delay = 0;
     const cocked = cur && cur.name === 'spin' && !cur.dead && cur.state === 'cocked';
@@ -1609,12 +1610,20 @@ const Glove = (() => {
   }
   function spinGo(info = {}) { const w = wheel(); st.spinA0 = w ? w.a : 0; st.spinT0 = now(); st.spinEnd = now() + (info.remain || 4000); st.phase = 'spinning'; }
   function emit(type, d = {}) {
-    if (!started) return;
+    if (!started || hidden) return;
     if (type === 'bet') { if (now() - st.lastReact < 2500 || !chance(.4) || st.phase !== 'betting') return; }
     if (type === 'payout') { const { stake = 0, win = 0 } = d; type = !stake ? 'nobet' : win > stake * 4 ? 'bigwin' : win > stake ? 'win' : 'loss'; }
     if (type === 'bonusResult') { const { stake = 0, win = 0 } = d; type = !stake ? 'bonusWatch' : (d.m ?? win / stake - 1) < 1 ? 'bonusLoss' : 'bonusWin'; }
     react(type, d);
   }
-  return { init, room, spin, spinGo, emit, spinCurve, get state() { return { cur: cur && cur.name, phase: st.phase, layer, agit: st.agit }; }, _R: R, _IDLE: IDLE, _run: (n, pri = 7) => run('debug:' + n, c => (R[n] || IDLE[n] || WATCH[n])(c, {}), pri) };
+  // Player switch: hides the hand and stops every action. Turning it back on lets the hand drop in again.
+  function enable(on) {
+    if (hidden === !on) return;
+    hidden = !on;
+    if (!started) return;
+    if (hidden) { if (cur) kill(cur); cur = null; unlock(); [cv, fxc].forEach(c => c.style.display = 'none'); }
+    else { [cv, fxc].forEach(c => c.style.display = ''); rig.x.x = rig.x.t = W * rnd(.3, .7); rig.y.x = rig.y.t = -S0 * 4; rig.z.x = rig.z.t = .6; run('enter', async c => { c.pose('open', 60); c.orient(rnd(-.3, .3), PI, -.3, 40); await c.goPt('mid', W * rnd(.35, .65), Hh * .32, { dur: 1600, path: 's', ease: 'cubic', z: .55 }); await R.wave(c); }, 3); }
+  }
+  return { init, enable, room, spin, spinGo, emit, spinCurve, get state() { return { cur: cur && cur.name, phase: st.phase, layer, agit: st.agit }; }, _R: R, _IDLE: IDLE, _run: (n, pri = 7) => run('debug:' + n, c => (R[n] || IDLE[n] || WATCH[n])(c, {}), pri) };
 })();
 if (typeof window !== 'undefined') window.Glove = Glove;
