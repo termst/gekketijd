@@ -326,12 +326,11 @@ body.out #street,body.out .chips,body.out .acts{opacity:.45;pointer-events:none}
 .bclock.low{box-shadow:inset 0 0 0 1px var(--bad);color:var(--bad)}
 .bt{grid-column:1/-1;height:3px;background:#0000004d;overflow:hidden}
 .bt i{display:block;height:100%;width:0;background:var(--accent)}
-.brulespop{text-align:left;background:#0b231acc;border-top:1px solid var(--line2);border-bottom:1px solid var(--line2);padding:10px 14px;margin-top:10px;animation:fade .2s ease}
+.brulespop{text-align:center;background:#0b231acc;border-top:1px solid var(--line2);border-bottom:1px solid var(--line2);padding:10px 14px;margin-top:10px;animation:fade .2s ease}
 .brules{text-align:left;max-width:720px;margin:0 auto;font-size:14px;color:#e6dcc2;padding-left:22px;display:grid;gap:4px}
 .brules li::marker{color:var(--gold)}
 .brules li>b:first-child{color:var(--gold);--heft:2.5}
 ul.brules,.rsec ul.brules{list-style:none;padding-left:0}
-.intro ul.brules{padding:12px 0}
 .gl ul.brules{padding:0 14px 10px}
 .bplayers{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin:10px 0 4px}
 .bp{display:inline-flex;gap:6px;align-items:center;padding:4px 10px;background:#00000040;border-radius:var(--r);box-shadow:inset 0 0 0 1px #ffffff14;font-size:14px;white-space:nowrap}
@@ -377,31 +376,71 @@ canvas.gc{max-width:100%;display:block;margin:auto;touch-action:none;border-radi
 .tl-board{display:grid;gap:4px;justify-items:center}
 .tl-board b{font-size:14px}
 
-/* Intro card */
-.intro{display:grid;gap:12px;justify-items:center;padding:10px 6px 4px}
-.intro h2{font-size:44px!important;line-height:1;--heft:3}
+/* Intro card: the briefing before a bonus game. Centered, one goal line, 3 numbered steps with icons. */
+.intro{display:grid;gap:14px;justify-items:center;padding:8px 6px 4px;overflow-y:auto;min-height:0;overscroll-behavior:contain}
+.intro h2{font-size:46px!important;line-height:1;--heft:3;color:var(--goldhi)}
+.intro>.cat{margin-bottom:-6px}
 .badge{display:inline-block;padding:5px 14px 4px;border-radius:1px;--heft:2;font-size:14px;--track:.5px}
 .badge.in{background:var(--metal);color:#241206}
 .badge.late{background:#b9792a;color:#241206}
-.buyin{display:grid;gap:8px;justify-items:center;border-top:1px solid var(--accent);border-bottom:1px solid var(--line2);background:#0000002e;padding:12px 16px;width:min(520px,100%)}
-.buyin .bihead small{color:var(--mute)}
+.badge.watch{background:transparent;color:var(--mute);box-shadow:inset 0 0 0 1px var(--line2)}
+.buyin{display:grid;gap:10px;justify-items:center;border-top:1px solid var(--accent);border-bottom:1px solid var(--line2);background:#0000002e;padding:12px 16px;width:min(520px,100%)}
+.buyin .bihead{display:grid;gap:2px;justify-items:center}
+.buyin .bihead b{font-size:19px;--heft:3}
+.buyin .bihead small{color:var(--mute);font-size:13px}
 .buyin .birow{display:flex;gap:10px;align-items:center;width:100%;justify-content:center}
 .buyin input[type=range]{flex:1;accent-color:var(--accent)}
-.buyin #bival{min-width:70px;text-align:right}
-.buyin .note{font-size:12px;text-align:center}
-.badge.watch{background:transparent;color:var(--mute);box-shadow:inset 0 0 0 1px var(--line2)}
-.intro .brules{border-top:1px solid var(--line2);border-bottom:1px solid var(--line2);padding:12px 8px 12px 26px;font-size:15px;width:min(640px,100%)}
+.buyin #bival{min-width:70px;text-align:right;font-size:18px}
+.buyin .note{font-size:12.5px;text-align:center}
 .intro .bt{width:min(420px,90%)}
 .intro .bt i{animation:fill var(--dur,2.8s) linear forwards}
-.intro{overflow-y:auto;min-height:0;overscroll-behavior:contain}
 .intro .bplayers{margin:2px 0 0}
 .bwait{min-height:1.3em;color:var(--mute);font-size:15px;margin:0}
 .iacts{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
-.iacts .btn{min-width:150px}
+.iacts .btn{min-width:170px}
 .iacts .btn.done{opacity:1;background:#2f5a3a;color:#e3f5e2;box-shadow:inset 0 0 0 1px var(--good)}
 .tag.rd{background:transparent;color:var(--mute);box-shadow:inset 0 0 0 1px #ffffff1f}
 @keyframes rdpulse{50%{opacity:.45}}
 @keyframes fill{from{width:100%}to{width:0}}
+
+/* Explainer (games/brief.js): goal, steps, payout strip, extras. Shared by the briefing, the in-game Rules popup and the Rules dialog. */
+.brief{display:grid;gap:14px;justify-items:center;width:min(780px,100%);margin:0 auto;text-align:center}
+.bgoal{font-size:21px;--heft:2;line-height:1.25;color:var(--pearl);max-width:36ch;text-wrap:balance}
+.bsteps{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));width:100%;border-top:1px solid var(--line2);border-bottom:1px solid var(--line2)}
+.bsteps li{display:grid;justify-items:center;align-content:start;gap:7px;padding:16px 14px 14px}
+.bsteps li+li{box-shadow:inset 1px 0 0 var(--line2)}
+.bring{position:relative;display:grid;place-items:center;width:54px;height:54px;border-radius:50%;color:var(--accent);background:#00000038;box-shadow:inset 0 0 0 1.5px currentColor}
+.bring .bico{width:27px;height:27px}
+.bring em{position:absolute;top:-3px;left:-5px;display:grid;place-items:center;width:21px;height:21px;border-radius:50%;font-style:normal;font-size:12px;--heft:2.5;background:var(--accent);color:#170a06;box-shadow:0 0 0 2px #0f2a1e}
+.bsteps b{font-size:17px;--heft:2.5;line-height:1.1;text-transform:uppercase;color:var(--pearl)}
+.bsteps small{font-size:14px;--heft:.5;line-height:1.38;color:#e6dcc2;max-width:25ch;text-wrap:balance}
+.bpay{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;row-gap:8px}
+.bpay>small{font-size:11px;--track:1.5px;text-transform:uppercase;color:var(--mute);margin-right:14px}
+.bpay span{display:grid;justify-items:center;gap:2px;padding:0 16px}
+.bpay span+span{box-shadow:inset 1px 0 0 var(--line2)}
+.bpay b{font-size:24px;--heft:3;line-height:1;color:var(--goldhi)}
+.bpay span small{font-size:11.5px;color:var(--mute)}
+.bextra{list-style:none;padding:0;margin:0;display:flex;flex-wrap:wrap;justify-content:center;gap:8px 22px}
+.bextra li{display:inline-flex;align-items:center;gap:8px;font-size:14px;color:#e6dcc2}
+.bextra .bico{width:19px;height:19px;flex:none;color:var(--gold)}
+.bfull{width:min(640px,100%);margin:-4px auto 0;text-align:center}
+.bfull summary{display:inline-flex;align-items:center;gap:6px;cursor:pointer;list-style:none;font-size:12.5px;--track:1px;text-transform:uppercase;color:var(--mute);padding:3px 2px;border-bottom:1px dotted var(--line)}
+.bfull summary::-webkit-details-marker{display:none}
+.bfull summary::after{content:"+";color:var(--brass)}
+.bfull[open] summary::after{content:"-"}
+.bfull summary:hover{color:var(--pearl)}
+.bfull .brules{text-align:left;margin-top:10px;padding:10px 4px 2px;border-top:1px solid var(--line2);font-size:13.5px}
+.brief.sm{gap:10px}
+.brief.sm .bgoal{font-size:17px}
+.brief.sm .bsteps li{padding:10px 8px 9px;gap:5px}
+.brief.sm .bring{width:40px;height:40px}.brief.sm .bring .bico{width:21px;height:21px}
+.brief.sm .bring em{width:17px;height:17px;font-size:10.5px;box-shadow:0 0 0 2px var(--panel)}
+.brief.sm .bsteps b{font-size:14px}.brief.sm .bsteps small{font-size:12.5px}
+.brief.sm .bpay b{font-size:19px}.brief.sm .bextra li{font-size:12.5px}
+.brulespop .brief.sm .bring em{box-shadow:0 0 0 2px #0f2a1e}
+@media(max-width:620px){
+ .bgoal{font-size:17px}.bsteps li{padding:12px 6px 10px;gap:5px}.bring{width:42px;height:42px}.bring .bico{width:22px;height:22px}.bring em{width:18px;height:18px;font-size:11px}
+ .bsteps b{font-size:13.5px}.bsteps small{font-size:12px}.bpay span{padding:0 10px}.bpay b{font-size:19px}.bpay>small{flex-basis:100%;margin:0}.bextra{gap:6px 14px}.bextra li{font-size:12.5px}}
 
 /* Results */
 .final{position:absolute;inset:0;z-index:3;display:grid;place-items:center;padding:16px;background:#071710d9;animation:fade .3s ease}
@@ -466,15 +505,17 @@ dialog::backdrop{background:#0a0304d0}
 .rgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px 30px;align-items:start}
 .rcol{display:grid;gap:12px}
 #rules .gl{grid-template-columns:1fr 1fr;gap:0 18px}
-#rules .gl details[open]{grid-column:1/-1}
+#rules .gl>details[open]{grid-column:1/-1}
 #rules .brules{font-size:13.5px}
+#rules .gl>details>.brief{padding:4px 0 12px}
+#rules .gl>details>.bfull{margin-bottom:12px}
 @media(max-width:860px){.rgrid{grid-template-columns:1fr}}
-.gl details{border-bottom:1px solid var(--line2)}
-.gl summary{cursor:pointer;padding:7px 2px;--heft:2;list-style:none;display:flex;justify-content:space-between;transition:color .15s}
-.gl summary:hover{color:var(--gold)}
-.gl summary::-webkit-details-marker{display:none}
-.gl summary::after{content:"+";color:var(--brass)}
-.gl details[open] summary::after{content:"-"}
+.gl>details{border-bottom:1px solid var(--line2)}
+.gl>details>summary{cursor:pointer;padding:7px 2px;--heft:2;list-style:none;display:flex;justify-content:space-between;transition:color .15s}
+.gl>details>summary:hover{color:var(--gold)}
+.gl>details>summary::-webkit-details-marker{display:none}
+.gl>details>summary::after{content:"+";color:var(--brass)}
+.gl>details[open]>summary::after{content:"-"}
 .gl ul{padding:0 12px 8px 28px;font-size:13px;color:#e6dcc2}
 
 @keyframes fade{from{opacity:0}}

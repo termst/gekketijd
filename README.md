@@ -65,6 +65,8 @@ Tuning: `CALL_CHIPS`, `CALL_GRACE`, `CALL_BONUS`, `EMOTES`, `EMOTE_GAP` in `publ
 
 ## Minigame look and feel
 
+Explainers: `public/games/brief.js` (`RH.Brief`) holds a quick read per game: one goal line, 3 numbered steps with line icons (named like the game's own step tracker, so the briefing and the game match), a payout strip where it helps and up to 3 extras. The briefing, the in-game Rules button and the How to play dialog all show it, with the full rules from `games/<category>/*.js` behind a Full rules toggle. A game without an entry falls back to the full rules list. When a game's rules change, update its entry too.
+
 Every minigame renderer uses the shared kit in `public/games/kit.js` (`RH.K`), so all 16 games read the same way:
 
 - Steps: a numbered text line of the game's phases (for example Pick, Swap, Flip), the current one underlined in the category colour.

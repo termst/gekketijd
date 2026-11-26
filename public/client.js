@@ -534,12 +534,17 @@ const RH = (() => {
 <li><b>Late buy-in:</b> everyone else can join for 25% to 50% of the top backer's stake. Late joiners get 60% of their multiplier.</li>
 <li><b>Payout:</b> your final multiplier times your stake, plus your stake back.</li>
 <li><b>Items:</b> Shields and Swap tokens carry over between games.</li><li><b>Call it:</b> before and in the first seconds of a bonus game, anyone (also spectators) can put a chip on who tops it. Right calls get their chip back +20% and share the wrong calls. Nobody right: chips go back.</li><li><b>Taunt:</b> press T or the Taunt button to send a quick line to the table.</li></ul></section></div><div class="rcol"><p class="note">Each bonus field plays 1 of its 4 games, picked at random.</p>`;
-    for (const k of BONUS_KEYS) h += `<section class="rsec" style="--accent:${ACCENT[k]}"><h3><span class="cat">${CAT_NAMES[k]}</span></h3><div class="gl">${(catalog[k] || []).map(g => `<details><summary>${esc(g.name)}</summary><ul class="brules">${g.rules.map(ruleLi).join('')}</ul></details>`).join('')}</div></section>`;
+    for (const k of BONUS_KEYS) h += `<section class="rsec" style="--accent:${ACCENT[k]}"><h3><span class="cat">${CAT_NAMES[k]}</span></h3><div class="gl">${(catalog[k] || []).map(g => `<details><summary>${esc(g.name)}</summary>${briefHtml(g.id, g.rules, true)}</details>`).join('')}</div></section>`;
     h += '</div></div><p class="note">Orra is play money with no real value.</p>';
     if (S && S.battle) h = Battle.rules(S) + h;
     $('rulebody').innerHTML = h;
   }
   // 'Label: text' renders the label in bold so rules scan fast.
+  // Quick explainer (games/brief.js) with the full rules behind a toggle. Falls back to the plain rules list.
+  function briefHtml(id, rules, sm) {
+    const full = `<ul class="brules">${rules.map(ruleLi).join('')}</ul>`;
+    return RH.Brief && RH.Brief.has(id) ? RH.Brief.html(id, { sm }) + `<details class="bfull"><summary>Full rules</summary>${full}</details>` : full;
+  }
   function ruleLi(r) { const m = /^([^:]{1,18}): (.*)$/.exec(r); return m ? `<li><b>${esc(m[1])}:</b> ${esc(m[2])}</li>` : `<li>${esc(r)}</li>`; }
   function toast(t, ms = 3200, kind = '') { const e = $('toast'); e.textContent = t; e.className = 'on ' + kind; clearTimeout(toast.t); toast.t = setTimeout(() => e.classList.remove('on'), ms); }
   const say = t => { const e = $('say'); if (e.textContent === t) return; e.textContent = t; e.classList.remove('pop'); void e.offsetWidth; e.classList.add('pop'); };
@@ -729,7 +734,7 @@ const RH = (() => {
       const k = JSON.stringify([c.list, open, c.on, chip, m.me.bal]);
       if (el.dataset.k === k) return; el.dataset.k = k;
       if (c.until && open) { clearTimeout(el._t); el._t = setTimeout(() => { el.dataset.k = ''; calls(el, S || m); }, c.until - now() + 50); }
-      const head = `<div class="chead"><b>Call it</b><small>${mine ? `You called ${esc(P(mine.on).name)} for ${ORRA}${fmt(mine.amt)}` : open ? `Who tops this game? Right call: chip back +${Math.round(c.bonus * 100)}% and a share of the wrong calls` : 'Calls are closed'}</small><span class="cpool">Pool ${ORRA}${fmt(pool)}</span></div>`;
+      const head = `<div class="chead"><b>Call it</b><small>${mine ? `You called ${esc(P(mine.on).name)} for ${ORRA}${fmt(mine.amt)}` : open ? `Bet on who wins this game. Right: +${Math.round(c.bonus * 100)}% and a share of the pool` : 'Calls are closed'}</small><span class="cpool">Pool ${ORRA}${fmt(pool)}</span></div>`;
       const chips = open && !mine && canPlay ? `<div class="cchips">${c.chips.map(v => `<button class="kchip ${v === chip ? 'on' : ''}" data-chip="${v}" style="--c:#c9a14a" ${v > m.me.bal ? 'disabled' : ''}>${ORRA}${v}</button>`).join('')}</div>` : '';
       const cards = c.on.map(id => { const p = P(id), w = on(id), amt = w.reduce((a, [, x]) => a + x.amt, 0);
         return `<button class="ccard ${mine && mine.on === id ? 'mine' : ''}" data-on="${id}" style="--c:${p.color}" ${open && !mine && canPlay && chip <= m.me.bal ? '' : 'disabled'}>
@@ -789,7 +794,6 @@ const RH = (() => {
   const Bonus = (() => {
     let cur = null, inst = null, last = null, logKey = '', span = { ends: 0, tot: 1 };
     const box = () => $('box');
-    const rulesList = rules => `<ul class="brules">${rules.map(ruleLi).join('')}</ul>`;
     const accent = cat => box().style.setProperty('--accent', ACCENT[cat] || 'var(--gold)');
     // Intro is the briefing: no clock. Everyone who plays (or may still buy in) reads the rules and presses Ready.
     // The host can start early. Built once per round, then patched so the slider and scroll position stay put.
@@ -801,7 +805,7 @@ const RH = (() => {
       if (introKey !== k) {
         introKey = k; cur = null; last = null; introGo = false;
         box().innerHTML = `<div class="intro"><span class="cat">${CAT_NAMES[n.cat]}</span><h2>${esc(n.name)}</h2>
-          <span class="badge"></span>${rulesList(n.rules)}<div class="buyin" hidden></div>
+          <span class="badge"></span>${briefHtml(n.id, n.rules)}<div class="buyin" hidden></div>
           <div class="bplayers"></div><div class="calls"></div><p class="bwait" role="status" aria-live="polite"></p>
           <div class="iacts"><button class="btn go" id="bready">Ready</button><button class="btn" id="bskip" title="Host: start without waiting">Start now</button></div><div class="bt go" hidden><i></i></div></div>`;
         $('bonus').classList.add('on'); Sfx.play('game-show', { delay: Math.max(0, 500 - (performance.now() - landAt)) });
@@ -810,10 +814,10 @@ const RH = (() => {
         if (n.cap) {
           const bx = box().querySelector('.buyin'), start = Math.min(n.cap, Math.max(5, Math.round(n.cap / 2 / 5) * 5));
           bx.hidden = false;
-          bx.innerHTML = `<p class="bihead">Buy in, max <b>${orra(n.cap)}</b> <small>(${Math.round(n.share * 100)}% of top stake ${orra(n.top)})</small></p>
+          bx.innerHTML = `<p class="bihead"><b>Join this game?</b> <small>Buy in up to ${orra(n.cap)}</small></p>
             <div class="birow"><input type="range" id="biamt" min="5" max="${n.cap}" step="5" value="${start}" aria-label="Buy-in amount"><b id="bival">${orra(start)}</b></div>
-            <div class="birow"><button class="btn go" id="bigo">Buy in and ready</button><button class="btn" id="bipass">Watch</button></div>
-            <p class="note">Late: ${Math.round(n.latePay * 100)}% of your multiplier, no Prime Minute, you go after backers, their Edge Shields block your first attack.</p>`;
+            <div class="birow"><button class="btn go" id="bigo">Buy in and ready</button><button class="btn" id="bipass">Just watch</button></div>
+            <p class="note">Late joiners: ${Math.round(n.latePay * 100)}% of the multiplier, no Prime Minute, move after backers.</p>`;
           const r = $('biamt');
           r.oninput = () => { $('bival').innerHTML = orra(+r.value); tone(520 + +r.value / n.cap * 300, .03, .02); };
           $('bigo').onclick = () => { send({ t: 'buyin', amt: +r.value }); sfx('token_place'); if (G_) G_.emit('briefReady'); };
@@ -825,7 +829,7 @@ const RH = (() => {
       if (bx && !n.cap) bx.hidden = true;
       const badge = box().querySelector('.badge');
       badge.className = 'badge ' + (backer ? 'in' : late ? 'in late' : 'watch');
-      badge.textContent = backer ? 'Backer: full edge' : late ? 'Bought in late' : n.cap ? 'Not backed: buy in or watch' : 'Spectating';
+      badge.textContent = backer ? 'You play: backer' : late ? 'You play: late buy in' : n.cap ? 'You are not in yet' : 'You are watching';
       // Who plays and who the game waits for
       const inGame = id => n.backers.includes(id) || n.late.includes(id);
       const rows = m.players.filter(p => inGame(p.id) || n.wait.includes(p.id))
@@ -836,8 +840,8 @@ const RH = (() => {
       }).join('');
       const names = n.wait.map(id => players[id] ? players[id].name : '?');
       box().querySelector('.bwait').textContent = n.go ? 'Everyone is ready. Starting...'
-        : waiting && n.cap ? 'Take your time. Buy in or watch when you have read the rules.'
-        : waiting ? 'Take your time. Press Ready when you have read the rules.'
+        : waiting && n.cap ? 'No clock. Buy in or watch when you are set.'
+        : waiting ? 'No clock. Press Ready when you are set.'
         : names.length ? `Waiting for ${names.length > 3 ? names.slice(0, 3).join(', ') + ' and ' + (names.length - 3) + ' more' : names.join(', ')}` : '';
       const rb = $('bready'), sk = $('bskip');
       rb.hidden = n.go || !(backer || late) || (!waiting && !ready); rb.disabled = ready || n.go; rb.textContent = ready ? 'You are ready' : 'Ready';
@@ -864,7 +868,7 @@ const RH = (() => {
         cur = key; logKey = ''; $('bonus').classList.add('on'); accent(m.cat);
         box().innerHTML = `<div class="bhead"><div><span class="cat">${CAT_NAMES[m.cat]}</span><h2>${esc(m.name)}</h2></div>
           <div class="bmeta"><span class="bclock" hidden><b>0</b><small>s</small></span><button class="btn sm" id="brl" aria-expanded="false">Rules</button></div><div class="bt"><i></i></div></div>
-          <div class="brulespop" hidden>${rulesList(m.rules)}</div><div class="bplayers"></div><div class="calls mini"></div><div class="bbody"><div class="ga" id="ga"></div></div><div class="bfoot"><ul class="blog"></ul></div>`;
+          <div class="brulespop" hidden>${briefHtml(m.id, m.rules, true)}</div><div class="bplayers"></div><div class="calls mini"></div><div class="bbody"><div class="ga" id="ga"></div></div><div class="bfoot"><ul class="blog"></ul></div>`;
         $('brl').onclick = () => { const p = box().querySelector('.brulespop'), o = p.hidden; p.hidden = !o; $('brl').setAttribute('aria-expanded', o); $('brl').classList.toggle('on', o); };
         inst = { el: $('ga'), st: {} };
         if (r) r.mount(inst.el, inst.st, api(m));
