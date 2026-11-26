@@ -9,7 +9,7 @@ const RH = (() => {
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const store = { get: k => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
   const CAT_NAMES = { spare: 'Spare Change', grab: 'Cash Grab', drop: 'Drop Dead', prod: 'Productivitime' };
-  const ACCENT = { spare: '#e2557a', grab: '#e8b04a', drop: '#2cc3d8', prod: '#9d93ec' };
+  const ACCENT = { spare: '#8aa6e6', grab: '#e0bd66', drop: '#d58ac9', prod: '#e8705c' };
 
   // Orra: the currency. A ring holding an hourglass, with a stem through it like a dollar sign.
   const ORRA = '<svg class="orra" viewBox="0 0 24 24" aria-label="Orra"><circle cx="12" cy="12" r="8.6" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M8.4 7.2h7.2L12 12l3.6 4.8H8.4L12 12z" fill="currentColor"/><path d="M12 0.5v3.4M12 20.1v3.4" stroke="currentColor" stroke-width="2.4"/></svg>';
@@ -178,19 +178,19 @@ const RH = (() => {
   const ICON = {};
   BONUS_KEYS.forEach(k => { const im = new Image(); im.onload = () => { if (cx) { makeArt(); draw(); } }; im.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(medal(k).replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"')); ICON[k] = im; });
 
-  // Stage: art deco swirl in flat bands, emerald left and crimson to hot pink right, gold rules, string lights, halftone screen.
+  // Stage: an oxblood velvet curtain in soft folds, a warm spotlight pool behind the wheel, a vignette and fabric grain.
+  // Drawn once. Fold widths and crest tones come from a seeded random so the drape never looks like a repeat.
   function scenery() {
-    const X = 800, Y = 330, n = 16, pt = (cx, cy, r, a) => (cx + Math.cos(a) * r).toFixed(1) + ' ' + (cy + Math.sin(a) * r).toFixed(1);
-    let s = `<defs><pattern id="sc-ht" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(30)"><circle cx="3.5" cy="3.5" r="1.25" fill="#12030a"/></pattern></defs><rect width="1600" height="900" fill="#12050b"/>`;
-    const lights = ['', '', ''];
-    for (let i = n - 1; i >= 0; i--) {
-      const cx = X + i * 7, cy = Y + i * 11, r = 250 + i * 82, sp = Math.PI / 2 + i * .16, odd = i % 2;
-      const lit = Math.min(1, i / 5) * (1 - Math.max(0, i - 5) / 14); // deep near the wheel, brightest a few bands out
-      const green = mix('#06281a', odd ? '#157e4d' : '#0e623a', lit), pink = mix('#3e0516', odd ? '#c93d78' : '#9c1844', lit);
-      s += `<path d="M${pt(cx, cy, r, sp)}A${r} ${r} 0 0 1 ${pt(cx, cy, r, sp + Math.PI)}Z" fill="${green}"/><path d="M${pt(cx, cy, r, sp + Math.PI)}A${r} ${r} 0 0 1 ${pt(cx, cy, r, sp)}Z" fill="${pink}"/><circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#2b0d0d" stroke-width="${odd ? 5 : 3}"/><circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${G3}" stroke-opacity="${(.35 + lit * .5).toFixed(2)}" stroke-width="${odd ? 2.2 : 1.2}"/>`;
-      if (odd) { const m = Math.round(TAU * r / 44); for (let j = 0; j < m; j++) { const a = j / m * TAU, x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r; if (x > -10 && x < 1610 && y > -10 && y < 910) lights[j % 3] += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="5" fill="#ffd9a0" opacity=".2"/><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.2" fill="${CREAM}" stroke="${INK}" stroke-width=".8"/>`; } }
-    }
-    s += '<rect width="1600" height="900" fill="url(#sc-ht)" opacity=".35"/>' + lights.map((l, i) => `<g class="tw t${i}">${l}</g>`).join('');
+    let sd = 7; const rnd = () => (sd = sd * 16807 % 2147483647) / 2147483647;
+    const crest = ['#4a0d18', '#561020', '#3f0a14'];
+    let s = `<defs>${crest.map((c, i) => `<linearGradient id="fd${i}" x1="0" x2="1"><stop offset="0" stop-color="#0d0205"/><stop offset=".3" stop-color="${mix(c, '#0d0205', .45)}"/><stop offset=".56" stop-color="${c}"/><stop offset=".72" stop-color="${mix(c, '#0d0205', .3)}"/><stop offset="1" stop-color="#0d0205"/></linearGradient>`).join('')}
+      <radialGradient id="sc-spot" cx="800" cy="360" r="560" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#ffc89a" stop-opacity=".22"/><stop offset=".5" stop-color="#ff9a6a" stop-opacity=".07"/><stop offset="1" stop-color="#ff9a6a" stop-opacity="0"/></radialGradient>
+      <radialGradient id="sc-vig" cx="800" cy="380" r="980" gradientUnits="userSpaceOnUse"><stop offset=".35" stop-color="#070203" stop-opacity="0"/><stop offset="1" stop-color="#070203" stop-opacity=".92"/></radialGradient>
+      <linearGradient id="sc-top" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#070203" stop-opacity=".85"/><stop offset=".22" stop-color="#070203" stop-opacity="0"/></linearGradient>
+      <filter id="sc-nap" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".9 .06" numOctaves="2" seed="5"/><feColorMatrix values="0 0 0 0 1 0 0 0 0 .8 0 0 0 0 .75 0 0 0 1.4 -.62"/><feComponentTransfer><feFuncA type="linear" slope=".11"/></feComponentTransfer></filter>
+    </defs><rect width="1600" height="900" fill="#0d0205"/>`;
+    for (let x = -20; x < 1620;) { const w = 64 + rnd() * 58; s += `<rect x="${x.toFixed(1)}" width="${(w + 1).toFixed(1)}" height="900" fill="url(#fd${Math.floor(rnd() * 3)})"/>`; x += w; }
+    s += '<rect width="1600" height="900" filter="url(#sc-nap)"/><rect width="1600" height="900" fill="url(#sc-spot)"/><rect width="1600" height="900" fill="url(#sc-vig)"/><rect width="1600" height="900" fill="url(#sc-top)"/>';
     $('scene').innerHTML = s;
   }
 
@@ -221,7 +221,6 @@ const RH = (() => {
     c.lineWidth = 1.5; c.strokeStyle = INK; [r0, r1].forEach(r => { c.beginPath(); c.arc(0, 0, r, 0, TAU); c.stroke(); });
   }
   function metal(c, rot = 0) { const g = c.createConicGradient(rot, 0, 0); [G1, G3, G4, G2, G1, G3, G4, G2, G1].forEach((x, i) => g.addColorStop(i / 8, x)); return g; }
-  const hsh = n => { n = Math.imul(n ^ n >>> 15, 0x2c1b3c6d); n = Math.imul(n ^ n >>> 12, 0x297a2d39); return ((n ^ n >>> 15) >>> 0) / 4294967296; };
   function spark(c, x, y, s, a) { c.save(); c.translate(x, y); c.globalAlpha = a; c.fillStyle = '#fffbe8'; c.beginPath(); c.moveTo(0, -s); c.quadraticCurveTo(0, 0, s, 0); c.quadraticCurveTo(0, 0, 0, s); c.quadraticCurveTo(0, 0, -s, 0); c.quadraticCurveTo(0, 0, 0, -s); c.fill(); c.restore(); }
   function glitter() {
     if (glit) return glit;
@@ -376,7 +375,6 @@ const RH = (() => {
     for (let i = 0; i < 48; i++) { const a = (i + .5) / 48 * TAU; c.drawImage(CALM || (i + blink) % 3 ? bulbOn : bulbOff, Math.cos(a) * (R + 29) - 18, Math.sin(a) * (R + 29) - 18, 36, 36); }
     for (let i = 0; i < 24; i++) { const a = (i + .5) / 24 * TAU; c.drawImage(CALM || (i + blink) % 2 ? bulbOn : bulbOff, Math.cos(a) * 111.5 - 12, Math.sin(a) * 111.5 - 12, 24, 24); }
     if (hubLogo) { const p = hubLogo.pad; c.drawImage(hubLogo.e, -LOGO_W / 2 - p, -LOGO_H / 2 - p - 2, LOGO_W + p * 2, LOGO_H + p * 2); }
-    if (!CALM) for (let i = 0; i < 5; i++) { const h = hsh(i * 7919 + blink * 104729), a = h * TAU, r = i < 3 ? R + 48 - (i % 2) * 37 : R + 29; spark(c, Math.cos(a) * r, Math.sin(a) * r, 6 + hsh(h * 1e9 | 0) * 5, .95); }
     pointer(c);
     c.setTransform(1, 0, 0, 1, 0, 0);
   }

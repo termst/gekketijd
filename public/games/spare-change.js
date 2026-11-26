@@ -2,7 +2,7 @@
 // Spare Change renderers: Minority Rules, Streak or Bank, Coin Duel, Weighted Coin
 (() => {
   const { G, esc, fx2, now, coinFlip, coinHtml, tone, K } = RH;
-  const SIDE = { red: '#e0454f', blue: '#3a7ee0' };
+  const SIDE = { red: '#b4382c', blue: '#2f5d98' };
   const av = (p, extra = '') => `<span class="kav ${extra}" style="--c:${p.color}" title="${esc(p.name)}">${esc(p.name.slice(0, 2))}</span>`;
   // Fire fn once when the coin that lands at `at` has landed
   const onLand = (st, key, at, fn) => { if (!K.once(st, key)) return; setTimeout(fn, Math.max(0, at - now() + 80)); };
@@ -135,7 +135,7 @@
         }
         for (const s of ['red', 'blue']) if (d.stops[s] && d.stops[s].p >= 0 && K.once(st, 's' + i + s)) {
           const c = el.querySelector(`canvas[data-i="${i}"]`), [x, y] = K.canvasPt(c, d.stops[s].p * 700, 50, 700, c.height);
-          K.pop(x, y - 20, fx2(d.stops[s].m) + 'x', { color: s === 'red' ? '#ff9a9a' : '#9ac2ff', kind: d.stops[s].m >= 15 ? 'big' : '' });
+          K.pop(x, y - 20, fx2(d.stops[s].m) + 'x', { color: s === 'red' ? '#f0a294' : '#a9c3e8', kind: d.stops[s].m >= 15 ? 'big' : '' });
           if (Math.abs(d.stops[s].p - v.spot[s]) <= v.perfect) { K.burst(x, y, { kind: 'spark', n: 40, colors: ['#fff', '#ffe58a'] }); K.pop(x, y - 60, 'PERFECT', { kind: 'big' }); }
         }
       });
@@ -165,7 +165,7 @@
         RHrr(x, 0, y0, W, bh, 6); x.fillStyle = '#0009'; x.fill(); x.fillStyle = g; x.fill();
         for (const s of ['red', 'blue']) {
           const sx = v.spot[s] * W;
-          x.save(); x.shadowColor = '#fff'; x.shadowBlur = 10; x.fillStyle = '#fff'; x.fillRect(sx - 2, y0 - 8, 4, bh + 16); x.restore();
+          x.fillStyle = '#000'; x.fillRect(sx - 3, y0 - 9, 6, bh + 18); x.fillStyle = '#f3e6c8'; x.fillRect(sx - 2, y0 - 8, 4, bh + 16);
           x.fillStyle = '#fff'; RH.heft(x, 12, 2); x.textAlign = 'center'; RH.htext(x, '20x', sx, y0 - 14);
         }
         let p = null;
@@ -175,10 +175,10 @@
           // Marker with a short motion trail
           for (let k = 6; k >= 0; k--) { const tt = t - k * 18, q = (((tt - v.t0) % v.period) + v.period) % v.period / v.period, pp = q < .5 ? q * 2 : 2 - q * 2;
             x.globalAlpha = k ? .12 * (7 - k) / 7 : 1; x.fillStyle = '#ffe58a'; x.fillRect(pp * W - 4, y0 - 12, 8, bh + 24); }
-          x.globalAlpha = 1; x.save(); x.shadowColor = '#ffe58a'; x.shadowBlur = 18; x.fillStyle = '#fff8d0'; x.fillRect(p * W - 3, y0 - 12, 6, bh + 24); x.restore();
+          x.globalAlpha = 1; x.fillStyle = '#000'; x.fillRect(p * W - 4, y0 - 13, 8, bh + 26); x.fillStyle = '#f6e3a8'; x.fillRect(p * W - 3, y0 - 12, 6, bh + 24);
         }
         for (const s of ['red', 'blue']) { const k = d.stops[s]; if (k && k.p >= 0) {
-          const px = k.p * W; x.save(); x.shadowColor = '#000'; x.shadowBlur = 6; x.fillStyle = s === 'red' ? '#ff8a8a' : '#8ab8ff';
+          const px = k.p * W; x.save(); x.shadowColor = '#000'; x.shadowBlur = 6; x.fillStyle = s === 'red' ? '#f0a294' : '#a9c3e8';
           x.beginPath(); x.moveTo(px, y0 + bh + 2); x.lineTo(px - 10, H - 4); x.lineTo(px + 10, H - 4); x.fill(); x.fillRect(px - 2, y0 - 6, 4, bh + 10); x.restore();
           x.fillStyle = '#fff'; RH.heft(x, 14, 2.5); x.textAlign = s === 'red' ? 'right' : 'left'; RH.htext(x, fx2(k.m) + 'x', px + (s === 'red' ? -14 : 14), H - 10); } }
       });
