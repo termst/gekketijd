@@ -53,6 +53,27 @@ Non-backers can buy in late during the briefing:
 
 Tuning lives at the top of `public/core.js` (`GO_MS`, `BRIEF_MAX`, `LATE_PAY`, `lateShare`). Subgames can read `ctx.backer(pid)` and `ctx.late(pid)` for game specific edges.
 
+## Playing with friends: Call It and taunts
+
+| Feature | How it works |
+|---|---|
+| Call It | When the wheel lands on a bonus field, everyone (backers, late joiners and spectators) can put one chip (5, 10, 25 or 50) on the player they think tops that game. Open during the briefing and the first 6 s of the game (`CALL_GRACE`). |
+| Payout | Pari-mutuel among the callers: right callers get their chip back +20% (`CALL_BONUS`) plus a share of the wrong calls, in proportion to their chip. Nobody right, or nobody scored: every chip goes back. A tie at the top counts for both. Results show under the bonus results. |
+| Taunts | Press **T** or the Taunt button (bottom left), then a line or its number key. It pops as a speech bubble over your chip for everyone, also during minigames. One per 0.9 s (`EMOTE_GAP`). |
+
+Tuning: `CALL_CHIPS`, `CALL_GRACE`, `CALL_BONUS`, `EMOTES`, `EMOTE_GAP` in `public/core.js`. The taunt lines live in `Social` in `public/client.js` (keep `EMOTES` equal to their count).
+
+## Minigame look and feel
+
+Every minigame renderer uses the shared kit in `public/games/kit.js` (`RH.K`), so all 16 games read the same way:
+
+- Steps: a numbered tracker of the game's phases (for example Pick, Swap, Flip), the current one lit.
+- Cue: one line saying what to do right now. It pulses when it is your move.
+- Scoreboard: one chip per player with live values that tween, pop the change and flash up or down.
+- Effects: floating text (`pop`), confetti, sparks and coins (`burst`, one fixed canvas that only runs while particles live), shake and flash. Reduced motion settings skip particles and animations.
+- Shared canvases: wheels have chasing rim bulbs, shading, pulsing landing highlights and flapper ticks while spinning. Pachinko boards have shaded pegs, glowing pucks with trails and slot flashes.
+- Keyboard: Space for STOP, BRAKE, drop and lock; A and D (or arrows) to aim or tilt; R and B to call in Streak or Bank.
+
 ## Wheel weighting
 
 The wheel is random with two small leans (`pickIndex` in `public/core.js`):
@@ -96,7 +117,8 @@ Open http://localhost:8080. Node 18+, no `npm install`. The server reads `PORT` 
 - `public/core.js`: the game core (lobbies, wheel, economy, bonus host). Used by both `server.js` and the browser host.
 - `public/net.js`: peer to peer transport for GitHub Pages mode.
 - `public/glove.js`: the Glove (see above). `client.js` feeds it room updates and events and asks it before each spin.
-- `games/<category>/*.js`: 16 subgames. After changing one, run `node tools/bundle-games.js` to rebuild `public/games-bundle.js` for the browser.
+- `games/<category>/*.js`: 16 subgames (server side logic). After changing one, run `node tools/bundle-games.js` to rebuild `public/games-bundle.js` for the browser.
+- `public/games/*.js`: the renderers per category, on top of `public/games/kit.js`.
 - `public/`: client, shared physics, renderers per category, `vendor/peerjs.min.js` (PeerJS 1.5.4, MIT).
 - `public/sfx.js` + `public/sfx/`: sound effects. Files are `<group>-<n>.mp3`, trimmed, de-clicked (short fades) and loudness matched offline. Each play draws a variant from a shuffle bag (no repeat until all variants played, never twice in a row), with a small pitch and level spread, sometimes a soft attack or a start offset, and glove sounds panned to where the glove is. Groups and levels: the `DEF` table at the top of `sfx.js`. Countdown ticks (`countdown()` in `client.js`) run over the last 5 s of betting (3 s on rounds under 10 s), the last 3 s of a bonus buy-in window and of bonus game clocks: woodblock ticks that get louder and higher, a stopwatch layer at 2, the modern tick on the final second. A tick only fires right at its second boundary, so lag or a hidden tab never plays it late.
 

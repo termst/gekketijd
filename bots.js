@@ -31,6 +31,9 @@ function bot(i) {
     if (m.t === 'room' && m.phase === 'intro' && m.next && m.next.wait.includes(m.you) && intro !== m.round) {
       intro = m.round;
       setTimeout(() => send(m.next.cap ? (Math.random() < 0.6 ? { t: 'buyin', amt: 5 * (1 + R(m.next.cap / 5)) } : { t: 'buyin', pass: true }) : { t: 'bready' }), 500 + R(2500));
+      // Call It: back a random player now and then, and taunt a little
+      if (m.calls && m.calls.on.length && Math.random() < 0.7) setTimeout(() => send({ t: 'call', on: pick(m.calls.on), amt: pick([5, 10, 25]) }), 300 + R(1500));
+      if (Math.random() < 0.3) setTimeout(() => send({ t: 'emote', k: R(12) }), 800 + R(3000));
     }
     if (m.t === 'bonus') { lastB = m.part ? m : null; if (m.part) play(m); }
     if (m.t === 'room' && m.phase !== 'bonus') lastB = null;

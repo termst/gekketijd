@@ -65,6 +65,7 @@ const RH = (() => {
     if (m.t === 'room') { if (bestRtt > 1e8) off = m.now - Date.now(); onRoom(m); return; }
     if (m.t === 'bonus') return Bonus.update(m);
     if (m.t === 'fx') return Bonus.fx(m);
+    if (m.t === 'emote') return Social.emote(m);
   }
 
   // ---- Lobby screen ----
@@ -534,7 +535,7 @@ const RH = (() => {
 <li><b>Backers</b> (bet on the field) always play: full multiplier, Prime Minute boost, first turn, and an Edge Shield against late joiners.</li>
 <li><b>Late buy-in:</b> everyone else can join for 25% to 50% of the top backer's stake. Late joiners get 60% of their multiplier.</li>
 <li><b>Payout:</b> your final multiplier times your stake, plus your stake back.</li>
-<li><b>Items:</b> Shields and Swap tokens carry over between games.</li></ul></section></div><div class="rcol"><p class="note">Each bonus field plays 1 of its 4 games, picked at random.</p>`;
+<li><b>Items:</b> Shields and Swap tokens carry over between games.</li><li><b>Call it:</b> before and in the first seconds of a bonus game, anyone (also spectators) can put a chip on who tops it. Right calls get their chip back +20% and share the wrong calls. Nobody right: chips go back.</li><li><b>Taunt:</b> press T or the Taunt button to send a quick line to the table.</li></ul></section></div><div class="rcol"><p class="note">Each bonus field plays 1 of its 4 games, picked at random.</p>`;
     for (const k of BONUS_KEYS) h += `<section class="rsec" style="--accent:${ACCENT[k]}"><h3><span class="cat">${CAT_NAMES[k]}</span></h3><div class="gl">${(catalog[k] || []).map(g => `<details><summary>${esc(g.name)}</summary><ul class="brules">${g.rules.map(ruleLi).join('')}</ul></details>`).join('')}</div></section>`;
     h += '</div></div><p class="note">Orra is play money with no real value.</p>';
     if (S && S.battle) h = Battle.rules(S) + h;
@@ -570,7 +571,7 @@ const RH = (() => {
     $('people').innerHTML = m.players.filter(p => !live || p.alive || p.place || p.online).map(p => {
       const tot = Object.values(p.bets).reduce((a, b) => a + b, 0), dead = live && !p.alive;
       const prog = live && p.alive ? `<span class="prog" title="${fmt(p.bal)} of ${fmt(B.target)}"><i style="width:${Math.min(100, p.bal / B.target * 100).toFixed(1)}%"></i></span>` : '';
-      return `<span class="pl ${p.online ? '' : 'off'} ${p.ready && betting ? 'ready' : ''} ${p.id === m.you ? 'me' : ''} ${dead ? 'out' : ''}" style="--c:${p.color}"><i></i><b>${esc(p.name)}</b>${dead ? `<span class="tag bad">${p.place ? 'Out #' + p.place : 'Watching'}</span>` : `<small>${ORRA}${fmt(p.bal - (betting ? tot : 0))}</small>`}${lead && lead.id === p.id && m.players.filter(q => q.alive).length > 1 ? '<span class="tag lead">Lead</span>' : ''}${live && B.underdog === p.id && p.alive ? '<span class="tag" title="Lowest stack: skips the ante this round">Underdog</span>' : ''}${p.ko ? `<span class="tag" title="Knockouts">KO ${p.ko}</span>` : ''}${tot && !dead ? `<span class="tag">bet ${fmt(tot)}</span>` : ''}${p.ready && betting && !dead ? '<span class="tag ok">READY</span>' : ''}${p.shield ? `<span class="tag" title="Shields">S${p.shield}</span>` : ''}${p.swap ? `<span class="tag" title="Swap tokens">W${p.swap}</span>` : ''}${prog}</span>`;
+      return `<span data-pid="${p.id}" class="pl ${p.online ? '' : 'off'} ${p.ready && betting ? 'ready' : ''} ${p.id === m.you ? 'me' : ''} ${dead ? 'out' : ''}" style="--c:${p.color}"><i></i><b>${esc(p.name)}</b>${dead ? `<span class="tag bad">${p.place ? 'Out #' + p.place : 'Watching'}</span>` : `<small>${ORRA}${fmt(p.bal - (betting ? tot : 0))}</small>`}${lead && lead.id === p.id && m.players.filter(q => q.alive).length > 1 ? '<span class="tag lead">Lead</span>' : ''}${live && B.underdog === p.id && p.alive ? '<span class="tag" title="Lowest stack: skips the ante this round">Underdog</span>' : ''}${p.ko ? `<span class="tag" title="Knockouts">KO ${p.ko}</span>` : ''}${tot && !dead ? `<span class="tag">bet ${fmt(tot)}</span>` : ''}${p.ready && betting && !dead ? '<span class="tag ok">READY</span>' : ''}${p.shield ? `<span class="tag" title="Shields">S${p.shield}</span>` : ''}${p.swap ? `<span class="tag" title="Swap tokens">W${p.swap}</span>` : ''}${prog}</span>`;
     }).join('');
     // fields
     const mine = me.bets || {}, tot = Object.values(mine).reduce((a, b) => a + b, 0);
@@ -646,6 +647,8 @@ const RH = (() => {
     say(msg);
     Battle.ui(m);
     if (m.phase === 'intro' && m.next) Bonus.intro(m);
+    if (m.phase === 'bonus') { const c = $('box').querySelector('.calls.mini'); if (c) Social.calls(c, m); }
+    Social.dock(m);
     if (m.phase === 'betting') Bonus.close();
     lastPhase = m.phase;
   }
@@ -714,6 +717,75 @@ const RH = (() => {
     return { ui, rules };
   })();
 
+  // ---- Social: Call It side bets and taunts ----
+  const Social = (() => {
+    const TAUNTS = ['GG', 'Nice one', 'Ouch', 'Hurry up', 'So lucky', 'Bring it on', 'No way', 'Revenge time', 'Too easy', 'Rigged', 'Watch this', 'Bye bye'];
+    let chip = 10;
+    const P = id => players[id] || { name: '?', color: '#888' };
+    // Call panel: big in the briefing, a compact strip in the game. Rebuilt only when something changed.
+    function calls(el, m) {
+      if (!el) return;
+      const c = m.calls; if (!c || !c.on.length) { el.innerHTML = ''; el.dataset.k = ''; return; }
+      const mine = c.list[m.you], open = c.open && (!c.until || now() < c.until), me = players[m.you], canPlay = me && (!m.battle || me.alive);
+      const pool = Object.values(c.list).reduce((a, x) => a + x.amt, 0), on = id => Object.entries(c.list).filter(([, x]) => x.on === id);
+      const k = JSON.stringify([c.list, open, c.on, chip, m.me.bal]);
+      if (el.dataset.k === k) return; el.dataset.k = k;
+      if (c.until && open) { clearTimeout(el._t); el._t = setTimeout(() => { el.dataset.k = ''; calls(el, S || m); }, c.until - now() + 50); }
+      const head = `<div class="chead"><b>Call it</b><small>${mine ? `You called ${esc(P(mine.on).name)} for ${ORRA}${fmt(mine.amt)}` : open ? `Who tops this game? Right call: chip back +${Math.round(c.bonus * 100)}% and a share of the wrong calls` : 'Calls are closed'}</small><span class="cpool">Pool ${ORRA}${fmt(pool)}</span></div>`;
+      const chips = open && !mine && canPlay ? `<div class="cchips">${c.chips.map(v => `<button class="kchip ${v === chip ? 'on' : ''}" data-chip="${v}" style="--c:#c9a14a" ${v > m.me.bal ? 'disabled' : ''}>${ORRA}${v}</button>`).join('')}</div>` : '';
+      const cards = c.on.map(id => { const p = P(id), w = on(id), amt = w.reduce((a, [, x]) => a + x.amt, 0);
+        return `<button class="ccard ${mine && mine.on === id ? 'mine' : ''}" data-on="${id}" style="--c:${p.color}" ${open && !mine && canPlay && chip <= m.me.bal ? '' : 'disabled'}>
+          <span class="kav" style="--c:${p.color}">${esc(p.name.slice(0, 2))}</span><span class="cn">${esc(p.name)}${id === m.you ? ' (you)' : ''}</span>
+          <span class="cw">${w.map(([cid]) => `<i style="--c:${P(cid).color}" title="${esc(P(cid).name)}"></i>`).join('')}${amt ? `<small>${ORRA}${fmt(amt)}</small>` : ''}</span>${open && !mine && canPlay ? `<em>Call ${ORRA}${chip}</em>` : ''}</button>`; }).join('');
+      el.innerHTML = head + chips + `<div class="ccards">${cards}</div>`;
+      el.classList.toggle('closed', !open);
+      el.querySelectorAll('[data-chip]').forEach(b => b.onclick = () => { chip = +b.dataset.chip; tone(500 + chip * 4, .04); el.dataset.k = ''; calls(el, S || m); });
+      el.querySelectorAll('[data-on]').forEach(b => b.onclick = () => { send({ t: 'call', on: b.dataset.on, amt: chip }); sfx('token_place'); if (RH.K) RH.K.burstAt(b, { kind: 'coin', n: 14, colors: ['#ffd34d', '#e6b030'] }); });
+    }
+    function resultHtml(m) {
+      const r = m.results.calls; if (!r || !r.length) return '';
+      return `<div class="cres"><h4>Calls</h4>${r.map(x => `<div class="${x.id === m.you ? 'me' : ''} ${x.hit ? 'hit' : x.refund ? '' : 'miss'}"><span class="pdot" style="--c:${P(x.id).color}"></span>${esc(P(x.id).name)} <small>on</small> ${esc(P(x.on).name)}<b>${x.refund ? 'refund' : x.hit ? '+' + fmt(x.win - x.amt) : '-' + fmt(x.amt)}</b></div>`).join('')}</div>`;
+    }
+    function resultFx(m) {
+      const r = (m.results.calls || []).find(x => x.id === m.you); if (!r || r.refund) return;
+      if (r.hit) { toast(`Good call: ${P(r.on).name} topped it. +${fmt(r.win - r.amt)} Orra`, 3500, 'ok'); if (RH.K) RH.K.burstAt($('box').querySelector('.cres'), { kind: 'coin', n: 30, colors: ['#ffd34d', '#e6b030'] }); }
+      else toast(`Wrong call: ${P(r.on).name} did not top it.`, 3000, 'bad');
+    }
+    // Taunt dock: bottom left, over every overlay
+    let built = false;
+    function dock(m) {
+      if (built) return; built = true;
+      const d = document.createElement('div'); d.id = 'taunt';
+      d.innerHTML = `<div class="tlist" hidden>${TAUNTS.map((t, i) => `<button data-k="${i}">${esc(t)}${i < 9 ? `<kbd>${i + 1}</kbd>` : ''}</button>`).join('')}</div><button class="btn tbtn" aria-expanded="false" title="Taunt your friends (T)">Taunt</button>`;
+      document.body.appendChild(d);
+      const list = d.querySelector('.tlist'), btn = d.querySelector('.tbtn'), tog = o => { list.hidden = !o; btn.setAttribute('aria-expanded', o); btn.classList.toggle('on', o); };
+      btn.onclick = () => tog(list.hidden);
+      list.querySelectorAll('[data-k]').forEach(b => b.onclick = () => { send({ t: 'emote', k: +b.dataset.k }); tog(false); });
+      addEventListener('keydown', e => {
+        if (e.target.closest && e.target.closest('input,select,textarea')) return;
+        if (e.key === 't' && !e.ctrlKey && !e.metaKey) { tog(list.hidden); return; }
+        if (!list.hidden && /^[1-9]$/.test(e.key)) { send({ t: 'emote', k: +e.key - 1 }); tog(false); e.preventDefault(); e.stopPropagation(); }
+        if (e.key === 'Escape') tog(false);
+      }, true);
+      addEventListener('pointerdown', e => { if (!d.contains(e.target)) tog(false); });
+    }
+    function emote(m) {
+      const p = P(m.from), txt = TAUNTS[m.k]; if (!txt) return;
+      const sel = `[data-pid="${CSS.escape(m.from)}"],.kp[data-id="${CSS.escape(m.from)}"]`;
+      const cands = [...document.querySelectorAll(`#box ${sel}, #abox ${sel}, #people ${sel}`)].filter(e => e.offsetParent && e.getBoundingClientRect().width);
+      const a = cands.find(e => e.closest('#bonus.on') || e.closest('#arena.on')) || cands.find(e => e.closest('#people'));
+      const b = document.createElement('div'); b.className = 'bubble'; b.style.setProperty('--c', p.color);
+      b.innerHTML = `<small>${esc(p.name)}</small>${esc(txt)}`;
+      document.body.appendChild(b);
+      if (a) { const r = a.getBoundingClientRect(); b.style.left = Math.max(70, Math.min(innerWidth - 70, r.left + r.width / 2)) + 'px'; b.style.top = Math.max(50, r.top - 6) + 'px'; }
+      else { b.classList.add('free'); }
+      const n = document.querySelectorAll('.bubble.free').length; if (!a) b.style.bottom = 70 + (n - 1) * 46 + 'px';
+      tone(m.from === S.you ? 880 : 620, .06, .04);
+      setTimeout(() => b.remove(), 2600);
+    }
+    return { calls, resultHtml, resultFx, dock, emote };
+  })();
+
   // ---- Bonus overlay host ----
   const G = {};
   const Bonus = (() => {
@@ -732,7 +804,7 @@ const RH = (() => {
         introKey = k; cur = null; last = null; introGo = false;
         box().innerHTML = `<div class="intro"><span class="cat">${CAT_NAMES[n.cat]}</span><h2>${esc(n.name)}</h2>
           <span class="badge"></span>${rulesList(n.rules)}<div class="buyin" hidden></div>
-          <div class="bplayers"></div><p class="bwait" role="status" aria-live="polite"></p>
+          <div class="bplayers"></div><div class="calls"></div><p class="bwait" role="status" aria-live="polite"></p>
           <div class="iacts"><button class="btn go" id="bready">Ready</button><button class="btn" id="bskip" title="Host: start without waiting">Start now</button></div><div class="bt go" hidden><i></i></div></div>`;
         $('bonus').classList.add('on'); Sfx.play('game-show', { delay: Math.max(0, 500 - (performance.now() - landAt)) });
         $('bready').onclick = () => { send({ t: 'bready' }); tone(660, .12); if (G_) G_.emit('briefReady'); };
@@ -762,7 +834,7 @@ const RH = (() => {
         .sort((a, b) => inGame(b.id) - inGame(a.id) || n.late.includes(a.id) - n.late.includes(b.id) || (b.bets[n.cat] || 0) - (a.bets[n.cat] || 0));
       box().querySelector('.bplayers').innerHTML = rows.map(p => {
         const st = n.ready.includes(p.id) ? '<span class="tag ok">Ready</span>' : !p.online ? '<span class="tag">Away</span>' : inGame(p.id) ? '<span class="tag rd">Reading</span>' : '<span class="tag rd">Deciding</span>';
-        return `<span class="bp ${p.id === m.you ? 'me' : ''}" style="--c:${p.color}"><i></i>${esc(p.name)}${inGame(p.id) ? `<small>${ORRA}${fmt(p.bets[n.cat])}</small><span class="tag ${n.late.includes(p.id) ? '' : 'ok'}">${n.late.includes(p.id) ? 'Late' : 'Backer'}</span>` : ''}${st}</span>`;
+        return `<span data-pid="${p.id}" class="bp ${p.id === m.you ? 'me' : ''}" style="--c:${p.color}"><i></i>${esc(p.name)}${inGame(p.id) ? `<small>${ORRA}${fmt(p.bets[n.cat])}</small><span class="tag ${n.late.includes(p.id) ? '' : 'ok'}">${n.late.includes(p.id) ? 'Late' : 'Backer'}</span>` : ''}${st}</span>`;
       }).join('');
       const names = n.wait.map(id => players[id] ? players[id].name : '?');
       box().querySelector('.bwait').textContent = n.go ? 'Everyone is ready. Starting...'
@@ -773,6 +845,7 @@ const RH = (() => {
       rb.hidden = n.go || !(backer || late) || (!waiting && !ready); rb.disabled = ready || n.go; rb.textContent = ready ? 'You are ready' : 'Ready';
       rb.classList.toggle('done', ready);
       sk.hidden = !isHost || n.go || !n.wait.length || (n.wait.length === 1 && n.wait[0] === m.you);
+      Social.calls(box().querySelector('.intro .calls'), m);
       const bt = box().querySelector('.bt.go');
       if (n.go && !introGo) { introGo = true; bt.hidden = false; bt.style.setProperty('--dur', Math.max(300, m.ends - now()) + 'ms'); tone(780, .12); if (G_) G_.emit('briefGo'); }
     }
@@ -793,16 +866,17 @@ const RH = (() => {
         cur = key; logKey = ''; $('bonus').classList.add('on'); accent(m.cat);
         box().innerHTML = `<div class="bhead"><div><span class="cat">${CAT_NAMES[m.cat]}</span><h2>${esc(m.name)}</h2></div>
           <div class="bmeta"><span class="bclock" hidden><b>0</b><small>s</small></span><button class="btn sm" id="brl" aria-expanded="false">Rules</button></div><div class="bt"><i></i></div></div>
-          <div class="brulespop" hidden>${rulesList(m.rules)}</div><div class="bplayers"></div><div class="bbody"><div class="ga" id="ga"></div></div><div class="bfoot"><ul class="blog"></ul></div>`;
+          <div class="brulespop" hidden>${rulesList(m.rules)}</div><div class="bplayers"></div><div class="calls mini"></div><div class="bbody"><div class="ga" id="ga"></div></div><div class="bfoot"><ul class="blog"></ul></div>`;
         $('brl').onclick = () => { const p = box().querySelector('.brulespop'), o = p.hidden; p.hidden = !o; $('brl').setAttribute('aria-expanded', o); $('brl').classList.toggle('on', o); };
         inst = { el: $('ga'), st: {} };
         if (r) r.mount(inst.el, inst.st, api(m));
       }
       if (m.ends !== span.ends) span = { ends: m.ends, tot: Math.max(1000, m.ends - now()) };
-      box().querySelector('.bplayers').innerHTML = m.players.map(p => `<span class="bp ${p.id === m.me ? 'me' : ''}" style="--c:${p.color}"><i></i>${esc(p.name)}<small>${ORRA}${fmt(p.stake)}</small>${p.late ? '<span class="tag" title="Bought in late">Late</span>' : ''}${p.edge ? '<span class="tag ok" title="Blocks the first attack from a late joiner">Edge</span>' : ''}${p.shield ? `<span class="tag" title="Shields">Shield ${p.shield}</span>` : ''}${p.swap ? `<span class="tag" title="Swap tokens">Swap ${p.swap}</span>` : ''}</span>`).join('') + (m.part ? '' : '<span class="bp watch">You are spectating</span>');
+      box().querySelector('.bplayers').innerHTML = m.players.map(p => `<span data-pid="${p.id}" class="bp ${p.id === m.me ? 'me' : ''}" style="--c:${p.color}"><i></i>${esc(p.name)}<small>${ORRA}${fmt(p.stake)}</small>${p.late ? '<span class="tag" title="Bought in late">Late</span>' : ''}${p.edge ? '<span class="tag ok" title="Blocks the first attack from a late joiner">Edge</span>' : ''}${p.shield ? `<span class="tag" title="Shields">Shield ${p.shield}</span>` : ''}${p.swap ? `<span class="tag" title="Swap tokens">Swap ${p.swap}</span>` : ''}</span>`).join('') + (m.part ? '' : '<span class="bp watch">You are spectating</span>');
       const lk = m.log.join('\n');
       if (lk !== logKey) { logKey = lk; box().querySelector('.blog').innerHTML = m.log.map(l => `<li>${esc(l)}</li>`).join(''); }
       if (r) try { r.update(inst.el, inst.st, m.v, api(m)); } catch (e) { console.error(e); }
+      if (S) Social.calls(box().querySelector('.calls.mini'), S);
     }
     function fx(m) { if (!inst || !last || last.id !== m.g || !G[m.g] || !G[m.g].fx) return; try { G[m.g].fx(inst.el, inst.st, m.d, api(last)); } catch (e) { console.error(e); } }
     function tick() {
@@ -825,8 +899,9 @@ const RH = (() => {
       box().insertAdjacentHTML('beforeend', `<div class="final"><div class="fcard"><span class="cat">${CAT_NAMES[m.results.key]}</span><h3>${esc(last ? last.name : 'Bonus')} results</h3>
         ${mine ? `<p class="mine ${mine.win > 0 ? 'win' : ''}">You finished at ${fx2(mine.m)}x and collect ${orra(mine.win)}${mine.vault ? `. ${orra(mine.vault)} saved to your wallet` : ''}</p>` : '<p class="note">You watched this one.</p>'}
         <table class="res"><tr><th>Player</th><th class="n">Result</th><th class="n">Stake</th><th class="n">Collect</th></tr>${rows.map(r => `<tr class="${r.id === m.you ? 'me' : ''}"><td><span class="pdot" style="--c:${pl(r.id).color}"></span>${esc(pl(r.id).name)}${r.late ? ' <span class="tag">Late</span>' : ''}</td><td class="n">${fx2(r.m)}x</td><td class="n">${fmt(r.stake)}</td><td class="n">${orra(r.win)}</td></tr>`).join('')}</table>
-        <button class="btn go" id="bclose">Back to the table</button></div></div>`);
+        ${Social.resultHtml(m)}<button class="btn go" id="bclose">Back to the table</button></div></div>`);
       const b = $('bclose'); if (b) { b.onclick = close; b.focus(); }
+      Social.resultFx(m);
     }
     function close() { $('bonus').classList.remove('on'); cur = null; inst = null; last = null; introKey = ''; introGo = false; }
     return { intro, update, fx, tick, results, close };
@@ -834,26 +909,50 @@ const RH = (() => {
 
   // ---- Shared drawing helpers for renderers ----
   // Segment wheel. rot is the (float) segment index at the top pointer.
+  // o: segs, rot, fill(i), text(i), ink(i), ring(i) (highlight colour), dim(i), hub, flappers [{ off, color, label }]
   function segWheel(c, o) {
-    const W = c.canvas.width, Hh = c.canvas.height, r = Math.min(W, Hh) / 2 - 34, n = o.segs.length;
+    const W = c.canvas.width, Hh = c.canvas.height, r = Math.min(W, Hh) / 2 - 40, n = o.segs.length, t = performance.now();
     c.clearRect(0, 0, W, Hh); c.save(); c.translate(W / 2, Hh / 2);
-    disc(c, r + 18, metal(c, .6)); disc(c, r + 6, '#140a06');
+    // Rim with chasing bulbs
+    c.save(); c.shadowColor = '#000c'; c.shadowBlur = 24; c.shadowOffsetY = 8; disc(c, r + 26, metal(c, .6)); c.restore();
+    disc(c, r + 17, '#2a1208'); disc(c, r + 6, '#140a06');
+    const nb = 32, lit = Math.floor(t / 140) % 3;
+    for (let k = 0; k < nb; k++) {
+      const a = k / nb * TAU; c.beginPath(); c.arc(Math.cos(a) * (r + 11.5), Math.sin(a) * (r + 11.5), 4.2, 0, TAU);
+      const on = k % 3 === lit; c.fillStyle = on ? '#fff6c8' : '#7a5a24'; if (on) { c.shadowColor = '#ffe58a'; c.shadowBlur = 10; } c.fill(); c.shadowBlur = 0;
+    }
     for (let i = 0; i < n; i++) {
       const a = (i - o.rot) * TAU / n - Math.PI / 2, w = TAU / n / 2;
       c.beginPath(); c.moveTo(0, 0); c.arc(0, 0, r, a - w, a + w); c.closePath(); c.fillStyle = o.fill(i); c.fill();
-      c.strokeStyle = '#e6c673'; c.lineWidth = 1.2; c.stroke();
-      if (o.ring) { const col = o.ring(i); if (col) { c.beginPath(); c.arc(0, 0, r - 3, a - w + .01, a + w - .01); c.strokeStyle = col; c.lineWidth = 6; c.stroke(); } }
-      c.save(); c.rotate(a); c.fillStyle = o.ink ? o.ink(i) : '#fff'; c.textAlign = 'right'; c.textBaseline = 'middle';
-      heft(c, Math.max(9, Math.min(20, TAU * r / n * .62)), 2.5); htext(c, o.text(i), r - 8, 1, r * .6);
+      if (o.dim && o.dim(i)) { c.fillStyle = '#000a'; c.fill(); }
+      c.strokeStyle = '#e6c67399'; c.lineWidth = 1.2; c.stroke();
+    }
+    // Shading: dark centre, glossy upper half
+    const sh = c.createRadialGradient(0, 0, r * .2, 0, 0, r); sh.addColorStop(0, '#0008'); sh.addColorStop(.55, '#0002'); sh.addColorStop(.92, '#0000'); sh.addColorStop(1, '#0005');
+    c.beginPath(); c.arc(0, 0, r, 0, TAU); c.fillStyle = sh; c.fill();
+    const gl = c.createLinearGradient(0, -r, 0, r * .2); gl.addColorStop(0, '#ffffff1e'); gl.addColorStop(1, '#fff0');
+    c.beginPath(); c.arc(0, 0, r, Math.PI, TAU); c.fillStyle = gl; c.fill();
+    for (let i = 0; i < n; i++) {
+      const a = (i - o.rot) * TAU / n - Math.PI / 2, w = TAU / n / 2;
+      if (o.ring) { const col = o.ring(i); if (col) {
+        const pz = .5 + .5 * Math.sin(t / 160);
+        c.save(); c.beginPath(); c.moveTo(0, 0); c.arc(0, 0, r, a - w, a + w); c.closePath(); c.fillStyle = col; c.globalAlpha = .18 + pz * .22; c.fill(); c.restore();
+        c.save(); c.beginPath(); c.arc(0, 0, r - 4, a - w + .01, a + w - .01); c.strokeStyle = col; c.lineWidth = 8; c.shadowColor = col; c.shadowBlur = 12 + pz * 10; c.stroke(); c.restore();
+      } }
+      c.save(); c.rotate(a); c.fillStyle = o.ink ? o.ink(i) : '#fff'; c.textAlign = 'right'; c.textBaseline = 'middle'; c.shadowColor = '#000'; c.shadowBlur = 3;
+      heft(c, Math.max(9, Math.min(22, TAU * r / n * .62)), 2.5); htext(c, o.text(i), r - 10, 1, r * .6);
       c.restore();
     }
-    disc(c, r * .22, metal(c, 1)); disc(c, r * .19, '#2c150b');
-    if (o.hub) { c.fillStyle = '#f3dc98'; c.textAlign = 'center'; c.textBaseline = 'middle'; heft(c, r * .09, 3); htext(c, o.hub, 0, 0); }
+    c.save(); c.shadowColor = '#000a'; c.shadowBlur = 12; disc(c, r * .23, metal(c, 1)); c.restore(); disc(c, r * .195, '#2c150b');
+    if (o.hub) { c.fillStyle = '#f3dc98'; c.textAlign = 'center'; c.textBaseline = 'middle'; heft(c, r * .1, 3); htext(c, o.hub, 0, 1); }
     for (const f of o.flappers || []) {
       const a = f.off * TAU / n - Math.PI / 2;
-      c.save(); c.rotate(a + Math.PI / 2); c.translate(0, -r - 14);
-      c.beginPath(); c.moveTo(-11, -14); c.lineTo(11, -14); c.lineTo(0, 16); c.closePath(); c.fillStyle = f.color; c.fill(); c.strokeStyle = '#000'; c.lineWidth = 2; c.stroke();
-      if (f.label) { c.rotate(-(a + Math.PI / 2)); c.fillStyle = '#fff'; heft(c, 12, 2); c.textAlign = 'center'; htext(c, f.label, 0, -26); }
+      c.save(); c.rotate(a + Math.PI / 2); c.translate(0, -r - 16);
+      c.shadowColor = '#000c'; c.shadowBlur = 8; c.shadowOffsetY = 3;
+      c.beginPath(); c.moveTo(-13, -16); c.lineTo(13, -16); c.lineTo(0, 20); c.closePath(); c.fillStyle = f.color; c.fill();
+      c.shadowBlur = 0; c.shadowOffsetY = 0; c.strokeStyle = '#fff'; c.lineWidth = 2.5; c.stroke();
+      c.beginPath(); c.arc(0, -8, 3.5, 0, TAU); c.fillStyle = '#fff8'; c.fill();
+      if (f.label) { c.rotate(-(a + Math.PI / 2)); c.fillStyle = '#fff'; c.shadowColor = '#000'; c.shadowBlur = 4; heft(c, 13, 2); c.textAlign = 'center'; htext(c, f.label, 0, -30); }
       c.restore();
     }
     c.restore();
@@ -865,27 +964,60 @@ const RH = (() => {
     const d = ((sp.to - sp.from) % n + n) % n + n * 4;
     return sp.from + d * e;
   }
+  // Pachinko board. o: vals, pegs, pucks [{ x, y, c, tr }], owner(i) slot colour, label(i), hit (slot), hot(i) glow colour, after(c)
+  let pegSprite = null;
+  function makePegSprite() {
+    const [e, c] = layer(24, 24), g = c.createRadialGradient(9, 9, 1, 12, 12, 10);
+    g.addColorStop(0, '#fffdf2'); g.addColorStop(.45, '#e6dcc0'); g.addColorStop(1, '#7a6a48');
+    c.beginPath(); c.arc(12, 13, 9, 0, TAU); c.fillStyle = '#0006'; c.fill();
+    c.beginPath(); c.arc(12, 12, 8, 0, TAU); c.fillStyle = g; c.fill(); return e;
+  }
   function drawBoard(c, o) {
-    const W = c.canvas.width, sc = W / RHS.BW;
-    c.setTransform(sc, 0, 0, sc, 0, 0); c.clearRect(0, 0, RHS.BW, RHS.BH);
-    c.fillStyle = '#0b2a1e'; c.fillRect(0, 0, RHS.BW, RHS.BH);
-    const n = o.vals.length, sw = RHS.BW / n;
+    const W = c.canvas.width, sc = W / RHS.BW, BW = RHS.BW, BH = RHS.BH, SY = RHS.SLOT_Y, t = performance.now();
+    c.setTransform(sc, 0, 0, sc, 0, 0); c.clearRect(0, 0, BW, BH);
+    const bg = c.createLinearGradient(0, 0, 0, BH); bg.addColorStop(0, '#0f3a2a'); bg.addColorStop(.7, '#0a2a1e'); bg.addColorStop(1, '#06170f');
+    c.fillStyle = bg; c.fillRect(0, 0, BW, BH);
+    const vg = c.createRadialGradient(BW / 2, BH * .4, BW * .2, BW / 2, BH * .4, BW * .9); vg.addColorStop(0, '#fff1'); vg.addColorStop(1, '#0000');
+    c.fillStyle = vg; c.fillRect(0, 0, BW, BH);
+    const n = o.vals.length, sw = BW / n;
     for (let i = 0; i < n; i++) {
-      const v = o.vals[i], own = o.owner ? o.owner(i) : null;
-      c.fillStyle = v === 'DOUBLE' ? '#b8891e' : own ? own : (i % 2 ? '#3d2013' : '#4d2a18');
-      c.fillRect(i * sw + 1, RHS.SLOT_Y - 12, sw - 2, RHS.BH - RHS.SLOT_Y + 12);
-      if (o.hit === i) { c.fillStyle = '#ffffff55'; c.fillRect(i * sw + 1, RHS.SLOT_Y - 12, sw - 2, RHS.BH - RHS.SLOT_Y + 12); }
-      c.fillStyle = '#fff'; c.textAlign = 'center'; c.textBaseline = 'middle';
-      v === 'DOUBLE' ? heft(c, Math.min(14, sw * .3), 2) : heft(c, Math.min(22, sw * .42), 3);
-      if (v === 'DOUBLE') { c.save(); c.translate(i * sw + sw / 2, RHS.SLOT_Y + 28); c.rotate(-Math.PI / 2); htext(c, 'DOUBLE', 0, 0); c.restore(); }
-      else htext(c, v + 'x', i * sw + sw / 2, RHS.SLOT_Y + 28);
-      if (o.label) { const l = o.label(i); if (l) { heft(c, 11, 1.5); htext(c, l, i * sw + sw / 2, RHS.BH - 10); } }
+      const v = o.vals[i], own = o.owner ? o.owner(i) : null, x0 = i * sw + 1, h = BH - SY + 12;
+      const g = c.createLinearGradient(0, SY - 12, 0, BH);
+      const base = v === 'DOUBLE' ? '#c9961e' : own || (i % 2 ? '#3d2013' : '#4d2a18');
+      g.addColorStop(0, base); g.addColorStop(1, '#0009');
+      c.fillStyle = base; c.fillRect(x0, SY - 12, sw - 2, h); c.fillStyle = g; c.fillRect(x0, SY - 12, sw - 2, h);
+      if (v === 'DOUBLE') { c.fillStyle = `rgba(255,240,180,${.12 + .1 * Math.sin(t / 200 + i)})`; c.fillRect(x0, SY - 12, sw - 2, h); }
+      const hot = o.hot ? o.hot(i) : null;
+      if (hot) { c.save(); c.strokeStyle = hot; c.lineWidth = 4; c.shadowColor = hot; c.shadowBlur = 14; c.strokeRect(x0 + 2, SY - 10, sw - 6, h - 4); c.restore(); }
+      if (o.hit === i) { c.save(); const pz = .5 + .5 * Math.sin(t / 120); c.fillStyle = `rgba(255,255,255,${.25 + pz * .3})`; c.fillRect(x0, SY - 12, sw - 2, h); c.restore(); }
+      c.save(); c.fillStyle = '#fff'; c.shadowColor = '#000'; c.shadowBlur = 4; c.textAlign = 'center'; c.textBaseline = 'middle';
+      if (v === 'DOUBLE') { heft(c, Math.min(15, sw * .32), 2); c.translate(i * sw + sw / 2, SY + 30); c.rotate(-Math.PI / 2); htext(c, 'DOUBLE', 0, 0); }
+      else { heft(c, Math.min(24, sw * .44), 3); htext(c, v + 'x', i * sw + sw / 2, SY + 28); }
+      c.restore();
+      if (o.label) { const l = o.label(i); if (l) { c.fillStyle = '#fff'; c.textAlign = 'center'; c.textBaseline = 'middle'; heft(c, 11, 1.5); htext(c, l, i * sw + sw / 2, BH - 10); } }
     }
-    c.fillStyle = '#e6c673'; for (let i = 1; i < n; i++) c.fillRect(i * sw - 1.5, RHS.SLOT_Y - 20, 3, RHS.BH);
-    for (const p of o.pegs) { c.beginPath(); c.arc(p.x, p.y, RHS.PEG_R, 0, TAU); c.fillStyle = p.c || '#e6dcc0'; c.fill(); if (p.c) { c.lineWidth = 2; c.strokeStyle = '#fff'; c.stroke(); } }
+    const dv = c.createLinearGradient(0, 0, 3, 0); dv.addColorStop(0, '#fff3c4'); dv.addColorStop(1, '#8a6c32');
+    c.fillStyle = dv; for (let i = 1; i < n; i++) { c.save(); c.translate(i * sw - 1.5, 0); c.fillRect(0, SY - 20, 3, BH); c.restore(); }
+    if (!pegSprite) pegSprite = makePegSprite();
+    const pr = RHS.PEG_R;
+    for (const p of o.pegs) {
+      if (p.c) { c.save(); c.shadowColor = p.c; c.shadowBlur = 14; c.beginPath(); c.arc(p.x, p.y, pr + 2, 0, TAU); c.fillStyle = p.c; c.fill(); c.lineWidth = 2; c.strokeStyle = '#fff'; c.stroke(); c.restore(); }
+      else c.drawImage(pegSprite, p.x - pr * 1.5, p.y - pr * 1.5, pr * 3, pr * 3);
+    }
+    const R = RHS.PUCK_R;
     for (const p of o.pucks || []) {
       if (p.dead) continue;
-      c.beginPath(); c.arc(p.x, p.y, RHS.PUCK_R, 0, TAU); c.fillStyle = p.c || '#fff'; c.fill(); c.lineWidth = 3; c.strokeStyle = '#fff'; c.stroke();
+      const col = p.c || '#fff';
+      if (p.tr && p.tr.length > 1) {
+        c.save(); c.lineCap = 'round';
+        for (let k = 1; k < p.tr.length; k++) { c.globalAlpha = k / p.tr.length * .45; c.strokeStyle = col; c.lineWidth = R * 1.6 * k / p.tr.length; c.beginPath(); c.moveTo(p.tr[k - 1][0], p.tr[k - 1][1]); c.lineTo(p.tr[k][0], p.tr[k][1]); c.stroke(); }
+        c.restore();
+      }
+      c.save(); c.shadowColor = col; c.shadowBlur = 16;
+      const g = c.createRadialGradient(p.x - R * .35, p.y - R * .4, 1, p.x, p.y, R);
+      g.addColorStop(0, '#fff'); g.addColorStop(.35, col); g.addColorStop(1, '#0008');
+      c.beginPath(); c.arc(p.x, p.y, R, 0, TAU); c.fillStyle = col; c.fill(); c.fillStyle = g; c.fill();
+      c.shadowBlur = 0; c.lineWidth = 2.5; c.strokeStyle = '#fff'; c.stroke(); c.restore();
     }
     if (o.after) o.after(c);
     c.setTransform(1, 0, 0, 1, 0, 0);
@@ -893,9 +1025,18 @@ const RH = (() => {
   // Keep a smoothed copy of streamed puck positions
   function track(st, frames) {
     st.pk = st.pk || {};
-    for (const [id, x, y, s] of frames) { const p = st.pk[id] || (st.pk[id] = { x, y }); if (p.ty !== undefined && y < p.ty - 150) { p.x = x; p.y = y; } p.tx = x; p.ty = y; p.s = s; }
+    for (const [id, x, y, s] of frames) { const p = st.pk[id] || (st.pk[id] = { x, y, tr: [] }); if (p.ty !== undefined && y < p.ty - 150) { p.x = x; p.y = y; p.tr = []; } p.tx = x; p.ty = y; p.s = s; }
   }
-  function smooth(st) { const out = []; for (const [id, p] of Object.entries(st.pk || {})) { p.x += (p.tx - p.x) * .45; p.y += (p.ty - p.y) * .45; out.push({ id: +id, x: p.x, y: p.y, dead: p.s === 2 }); } return out; }
+  function smooth(st) {
+    const out = [];
+    for (const [id, p] of Object.entries(st.pk || {})) {
+      p.x += (p.tx - p.x) * .45; p.y += (p.ty - p.y) * .45;
+      p.tr = p.tr || []; const l = p.tr[p.tr.length - 1];
+      if (!l || Math.hypot(l[0] - p.x, l[1] - p.y) > 3) { p.tr.push([p.x, p.y]); if (p.tr.length > 14) p.tr.shift(); } else if (p.tr.length > 1 && p.s) p.tr.shift();
+      out.push({ id: +id, x: p.x, y: p.y, dead: p.s === 2, done: p.s === 1, tr: p.tr });
+    }
+    return out;
+  }
   function coinFlip(el, side, at, dur) {
     const coin = el.querySelector('.coin3d'); if (!coin || coin.dataset.at == at) return;
     coin.dataset.at = at;
