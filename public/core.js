@@ -39,7 +39,8 @@ const rooms = new Map();
 const CODE_CH = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const CODE_OK = /^[A-Z0-9]{4}$/;
 function genCode() { let c; do { c = ''; for (let i = 0; i < 4; i++) c += CODE_CH[Math.floor(Math.random() * CODE_CH.length)]; } while (rooms.has(c)); return c; }
-const COLORS = ['#e8443a', '#3a8ee8', '#3ac46e', '#e8b23a', '#b45ae8', '#3ad6d6', '#e85aa8', '#a8d63a'];
+// Player inks: vintage print colours, distinct from each other and readable on velvet and baize.
+const COLORS = ['#d4523a', '#4f7fc4', '#4f9e64', '#dcae3c', '#9566b8', '#3e9e9a', '#cf6f92', '#9aa53e'];
 const MAX_PLAYERS = 8;
 // Run settings, chosen by the lobby creator. Every value is checked against these lists.
 const RUN_OPTS = {

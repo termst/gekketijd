@@ -9,7 +9,7 @@ const RH = (() => {
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const store = { get: k => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
   const CAT_NAMES = { spare: 'Spare Change', grab: 'Cash Grab', drop: 'Drop Dead', prod: 'Productivitime' };
-  const ACCENT = { spare: '#e2557a', grab: '#e8b04a', drop: '#2cc3d8', prod: '#9d93ec' };
+  const ACCENT = { spare: '#8aa6e6', grab: '#e0bd66', drop: '#d58ac9', prod: '#e8705c' };
 
   // Orra: the currency. A ring holding an hourglass, with a stem through it like a dollar sign.
   const ORRA = '<svg class="orra" viewBox="0 0 24 24" aria-label="Orra"><circle cx="12" cy="12" r="8.6" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M8.4 7.2h7.2L12 12l3.6 4.8H8.4L12 12z" fill="currentColor"/><path d="M12 0.5v3.4M12 20.1v3.4" stroke="currentColor" stroke-width="2.4"/></svg>';
@@ -178,19 +178,19 @@ const RH = (() => {
   const ICON = {};
   BONUS_KEYS.forEach(k => { const im = new Image(); im.onload = () => { if (cx) { makeArt(); draw(); } }; im.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(medal(k).replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"')); ICON[k] = im; });
 
-  // Stage: art deco swirl in flat bands, emerald left and crimson to hot pink right, gold rules, string lights, halftone screen.
+  // Stage: an oxblood velvet curtain in soft folds, a warm spotlight pool behind the wheel, a vignette and fabric grain.
+  // Drawn once. Fold widths and crest tones come from a seeded random so the drape never looks like a repeat.
   function scenery() {
-    const X = 800, Y = 330, n = 16, pt = (cx, cy, r, a) => (cx + Math.cos(a) * r).toFixed(1) + ' ' + (cy + Math.sin(a) * r).toFixed(1);
-    let s = `<defs><pattern id="sc-ht" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(30)"><circle cx="3.5" cy="3.5" r="1.25" fill="#12030a"/></pattern></defs><rect width="1600" height="900" fill="#12050b"/>`;
-    const lights = ['', '', ''];
-    for (let i = n - 1; i >= 0; i--) {
-      const cx = X + i * 7, cy = Y + i * 11, r = 250 + i * 82, sp = Math.PI / 2 + i * .16, odd = i % 2;
-      const lit = Math.min(1, i / 5) * (1 - Math.max(0, i - 5) / 14); // deep near the wheel, brightest a few bands out
-      const green = mix('#06281a', odd ? '#157e4d' : '#0e623a', lit), pink = mix('#3e0516', odd ? '#c93d78' : '#9c1844', lit);
-      s += `<path d="M${pt(cx, cy, r, sp)}A${r} ${r} 0 0 1 ${pt(cx, cy, r, sp + Math.PI)}Z" fill="${green}"/><path d="M${pt(cx, cy, r, sp + Math.PI)}A${r} ${r} 0 0 1 ${pt(cx, cy, r, sp)}Z" fill="${pink}"/><circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#2b0d0d" stroke-width="${odd ? 5 : 3}"/><circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${G3}" stroke-opacity="${(.35 + lit * .5).toFixed(2)}" stroke-width="${odd ? 2.2 : 1.2}"/>`;
-      if (odd) { const m = Math.round(TAU * r / 44); for (let j = 0; j < m; j++) { const a = j / m * TAU, x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r; if (x > -10 && x < 1610 && y > -10 && y < 910) lights[j % 3] += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="5" fill="#ffd9a0" opacity=".2"/><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.2" fill="${CREAM}" stroke="${INK}" stroke-width=".8"/>`; } }
-    }
-    s += '<rect width="1600" height="900" fill="url(#sc-ht)" opacity=".35"/>' + lights.map((l, i) => `<g class="tw t${i}">${l}</g>`).join('');
+    let sd = 7; const rnd = () => (sd = sd * 16807 % 2147483647) / 2147483647;
+    const crest = ['#4a0d18', '#561020', '#3f0a14'];
+    let s = `<defs>${crest.map((c, i) => `<linearGradient id="fd${i}" x1="0" x2="1"><stop offset="0" stop-color="#0d0205"/><stop offset=".3" stop-color="${mix(c, '#0d0205', .45)}"/><stop offset=".56" stop-color="${c}"/><stop offset=".72" stop-color="${mix(c, '#0d0205', .3)}"/><stop offset="1" stop-color="#0d0205"/></linearGradient>`).join('')}
+      <radialGradient id="sc-spot" cx="800" cy="360" r="560" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#ffc89a" stop-opacity=".22"/><stop offset=".5" stop-color="#ff9a6a" stop-opacity=".07"/><stop offset="1" stop-color="#ff9a6a" stop-opacity="0"/></radialGradient>
+      <radialGradient id="sc-vig" cx="800" cy="380" r="980" gradientUnits="userSpaceOnUse"><stop offset=".35" stop-color="#070203" stop-opacity="0"/><stop offset="1" stop-color="#070203" stop-opacity=".92"/></radialGradient>
+      <linearGradient id="sc-top" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#070203" stop-opacity=".85"/><stop offset=".22" stop-color="#070203" stop-opacity="0"/></linearGradient>
+      <filter id="sc-nap" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".9 .06" numOctaves="2" seed="5"/><feColorMatrix values="0 0 0 0 1 0 0 0 0 .8 0 0 0 0 .75 0 0 0 1.4 -.62"/><feComponentTransfer><feFuncA type="linear" slope=".11"/></feComponentTransfer></filter>
+    </defs><rect width="1600" height="900" fill="#0d0205"/>`;
+    for (let x = -20; x < 1620;) { const w = 64 + rnd() * 58; s += `<rect x="${x.toFixed(1)}" width="${(w + 1).toFixed(1)}" height="900" fill="url(#fd${Math.floor(rnd() * 3)})"/>`; x += w; }
+    s += '<rect width="1600" height="900" filter="url(#sc-nap)"/><rect width="1600" height="900" fill="url(#sc-spot)"/><rect width="1600" height="900" fill="url(#sc-vig)"/><rect width="1600" height="900" fill="url(#sc-top)"/>';
     $('scene').innerHTML = s;
   }
 
@@ -221,7 +221,6 @@ const RH = (() => {
     c.lineWidth = 1.5; c.strokeStyle = INK; [r0, r1].forEach(r => { c.beginPath(); c.arc(0, 0, r, 0, TAU); c.stroke(); });
   }
   function metal(c, rot = 0) { const g = c.createConicGradient(rot, 0, 0); [G1, G3, G4, G2, G1, G3, G4, G2, G1].forEach((x, i) => g.addColorStop(i / 8, x)); return g; }
-  const hsh = n => { n = Math.imul(n ^ n >>> 15, 0x2c1b3c6d); n = Math.imul(n ^ n >>> 12, 0x297a2d39); return ((n ^ n >>> 15) >>> 0) / 4294967296; };
   function spark(c, x, y, s, a) { c.save(); c.translate(x, y); c.globalAlpha = a; c.fillStyle = '#fffbe8'; c.beginPath(); c.moveTo(0, -s); c.quadraticCurveTo(0, 0, s, 0); c.quadraticCurveTo(0, 0, 0, s); c.quadraticCurveTo(0, 0, -s, 0); c.quadraticCurveTo(0, 0, 0, -s); c.fill(); c.restore(); }
   function glitter() {
     if (glit) return glit;
@@ -376,7 +375,6 @@ const RH = (() => {
     for (let i = 0; i < 48; i++) { const a = (i + .5) / 48 * TAU; c.drawImage(CALM || (i + blink) % 3 ? bulbOn : bulbOff, Math.cos(a) * (R + 29) - 18, Math.sin(a) * (R + 29) - 18, 36, 36); }
     for (let i = 0; i < 24; i++) { const a = (i + .5) / 24 * TAU; c.drawImage(CALM || (i + blink) % 2 ? bulbOn : bulbOff, Math.cos(a) * 111.5 - 12, Math.sin(a) * 111.5 - 12, 24, 24); }
     if (hubLogo) { const p = hubLogo.pad; c.drawImage(hubLogo.e, -LOGO_W / 2 - p, -LOGO_H / 2 - p - 2, LOGO_W + p * 2, LOGO_H + p * 2); }
-    if (!CALM) for (let i = 0; i < 5; i++) { const h = hsh(i * 7919 + blink * 104729), a = h * TAU, r = i < 3 ? R + 48 - (i % 2) * 37 : R + 29; spark(c, Math.cos(a) * r, Math.sin(a) * r, 6 + hsh(h * 1e9 | 0) * 5, .95); }
     pointer(c);
     c.setTransform(1, 0, 0, 1, 0, 0);
   }
@@ -536,12 +534,17 @@ const RH = (() => {
 <li><b>Late buy-in:</b> everyone else can join for 25% to 50% of the top backer's stake. Late joiners get 60% of their multiplier.</li>
 <li><b>Payout:</b> your final multiplier times your stake, plus your stake back.</li>
 <li><b>Items:</b> Shields and Swap tokens carry over between games.</li><li><b>Call it:</b> before and in the first seconds of a bonus game, anyone (also spectators) can put a chip on who tops it. Right calls get their chip back +20% and share the wrong calls. Nobody right: chips go back.</li><li><b>Taunt:</b> press T or the Taunt button to send a quick line to the table.</li></ul></section></div><div class="rcol"><p class="note">Each bonus field plays 1 of its 4 games, picked at random.</p>`;
-    for (const k of BONUS_KEYS) h += `<section class="rsec" style="--accent:${ACCENT[k]}"><h3><span class="cat">${CAT_NAMES[k]}</span></h3><div class="gl">${(catalog[k] || []).map(g => `<details><summary>${esc(g.name)}</summary><ul class="brules">${g.rules.map(ruleLi).join('')}</ul></details>`).join('')}</div></section>`;
+    for (const k of BONUS_KEYS) h += `<section class="rsec" style="--accent:${ACCENT[k]}"><h3><span class="cat">${CAT_NAMES[k]}</span></h3><div class="gl">${(catalog[k] || []).map(g => `<details><summary>${esc(g.name)}</summary>${briefHtml(g.id, g.rules, true)}</details>`).join('')}</div></section>`;
     h += '</div></div><p class="note">Orra is play money with no real value.</p>';
     if (S && S.battle) h = Battle.rules(S) + h;
     $('rulebody').innerHTML = h;
   }
   // 'Label: text' renders the label in bold so rules scan fast.
+  // Quick explainer (games/brief.js) with the full rules behind a toggle. Falls back to the plain rules list.
+  function briefHtml(id, rules, sm) {
+    const full = `<ul class="brules">${rules.map(ruleLi).join('')}</ul>`;
+    return RH.Brief && RH.Brief.has(id) ? RH.Brief.html(id, { sm }) + `<details class="bfull"><summary>Full rules</summary>${full}</details>` : full;
+  }
   function ruleLi(r) { const m = /^([^:]{1,18}): (.*)$/.exec(r); return m ? `<li><b>${esc(m[1])}:</b> ${esc(m[2])}</li>` : `<li>${esc(r)}</li>`; }
   function toast(t, ms = 3200, kind = '') { const e = $('toast'); e.textContent = t; e.className = 'on ' + kind; clearTimeout(toast.t); toast.t = setTimeout(() => e.classList.remove('on'), ms); }
   const say = t => { const e = $('say'); if (e.textContent === t) return; e.textContent = t; e.classList.remove('pop'); void e.offsetWidth; e.classList.add('pop'); };
@@ -731,7 +734,7 @@ const RH = (() => {
       const k = JSON.stringify([c.list, open, c.on, chip, m.me.bal]);
       if (el.dataset.k === k) return; el.dataset.k = k;
       if (c.until && open) { clearTimeout(el._t); el._t = setTimeout(() => { el.dataset.k = ''; calls(el, S || m); }, c.until - now() + 50); }
-      const head = `<div class="chead"><b>Call it</b><small>${mine ? `You called ${esc(P(mine.on).name)} for ${ORRA}${fmt(mine.amt)}` : open ? `Who tops this game? Right call: chip back +${Math.round(c.bonus * 100)}% and a share of the wrong calls` : 'Calls are closed'}</small><span class="cpool">Pool ${ORRA}${fmt(pool)}</span></div>`;
+      const head = `<div class="chead"><b>Call it</b><small>${mine ? `You called ${esc(P(mine.on).name)} for ${ORRA}${fmt(mine.amt)}` : open ? `Bet on who wins this game. Right: +${Math.round(c.bonus * 100)}% and a share of the pool` : 'Calls are closed'}</small><span class="cpool">Pool ${ORRA}${fmt(pool)}</span></div>`;
       const chips = open && !mine && canPlay ? `<div class="cchips">${c.chips.map(v => `<button class="kchip ${v === chip ? 'on' : ''}" data-chip="${v}" style="--c:#c9a14a" ${v > m.me.bal ? 'disabled' : ''}>${ORRA}${v}</button>`).join('')}</div>` : '';
       const cards = c.on.map(id => { const p = P(id), w = on(id), amt = w.reduce((a, [, x]) => a + x.amt, 0);
         return `<button class="ccard ${mine && mine.on === id ? 'mine' : ''}" data-on="${id}" style="--c:${p.color}" ${open && !mine && canPlay && chip <= m.me.bal ? '' : 'disabled'}>
@@ -791,7 +794,6 @@ const RH = (() => {
   const Bonus = (() => {
     let cur = null, inst = null, last = null, logKey = '', span = { ends: 0, tot: 1 };
     const box = () => $('box');
-    const rulesList = rules => `<ul class="brules">${rules.map(ruleLi).join('')}</ul>`;
     const accent = cat => box().style.setProperty('--accent', ACCENT[cat] || 'var(--gold)');
     // Intro is the briefing: no clock. Everyone who plays (or may still buy in) reads the rules and presses Ready.
     // The host can start early. Built once per round, then patched so the slider and scroll position stay put.
@@ -803,7 +805,7 @@ const RH = (() => {
       if (introKey !== k) {
         introKey = k; cur = null; last = null; introGo = false;
         box().innerHTML = `<div class="intro"><span class="cat">${CAT_NAMES[n.cat]}</span><h2>${esc(n.name)}</h2>
-          <span class="badge"></span>${rulesList(n.rules)}<div class="buyin" hidden></div>
+          <span class="badge"></span>${briefHtml(n.id, n.rules)}<div class="buyin" hidden></div>
           <div class="bplayers"></div><div class="calls"></div><p class="bwait" role="status" aria-live="polite"></p>
           <div class="iacts"><button class="btn go" id="bready">Ready</button><button class="btn" id="bskip" title="Host: start without waiting">Start now</button></div><div class="bt go" hidden><i></i></div></div>`;
         $('bonus').classList.add('on'); Sfx.play('game-show', { delay: Math.max(0, 500 - (performance.now() - landAt)) });
@@ -812,10 +814,10 @@ const RH = (() => {
         if (n.cap) {
           const bx = box().querySelector('.buyin'), start = Math.min(n.cap, Math.max(5, Math.round(n.cap / 2 / 5) * 5));
           bx.hidden = false;
-          bx.innerHTML = `<p class="bihead">Buy in, max <b>${orra(n.cap)}</b> <small>(${Math.round(n.share * 100)}% of top stake ${orra(n.top)})</small></p>
+          bx.innerHTML = `<p class="bihead"><b>Join this game?</b> <small>Buy in up to ${orra(n.cap)}</small></p>
             <div class="birow"><input type="range" id="biamt" min="5" max="${n.cap}" step="5" value="${start}" aria-label="Buy-in amount"><b id="bival">${orra(start)}</b></div>
-            <div class="birow"><button class="btn go" id="bigo">Buy in and ready</button><button class="btn" id="bipass">Watch</button></div>
-            <p class="note">Late: ${Math.round(n.latePay * 100)}% of your multiplier, no Prime Minute, you go after backers, their Edge Shields block your first attack.</p>`;
+            <div class="birow"><button class="btn go" id="bigo">Buy in and ready</button><button class="btn" id="bipass">Just watch</button></div>
+            <p class="note">Late joiners: ${Math.round(n.latePay * 100)}% of the multiplier, no Prime Minute, move after backers.</p>`;
           const r = $('biamt');
           r.oninput = () => { $('bival').innerHTML = orra(+r.value); tone(520 + +r.value / n.cap * 300, .03, .02); };
           $('bigo').onclick = () => { send({ t: 'buyin', amt: +r.value }); sfx('token_place'); if (G_) G_.emit('briefReady'); };
@@ -827,7 +829,7 @@ const RH = (() => {
       if (bx && !n.cap) bx.hidden = true;
       const badge = box().querySelector('.badge');
       badge.className = 'badge ' + (backer ? 'in' : late ? 'in late' : 'watch');
-      badge.textContent = backer ? 'Backer: full edge' : late ? 'Bought in late' : n.cap ? 'Not backed: buy in or watch' : 'Spectating';
+      badge.textContent = backer ? 'You play: backer' : late ? 'You play: late buy in' : n.cap ? 'You are not in yet' : 'You are watching';
       // Who plays and who the game waits for
       const inGame = id => n.backers.includes(id) || n.late.includes(id);
       const rows = m.players.filter(p => inGame(p.id) || n.wait.includes(p.id))
@@ -838,8 +840,8 @@ const RH = (() => {
       }).join('');
       const names = n.wait.map(id => players[id] ? players[id].name : '?');
       box().querySelector('.bwait').textContent = n.go ? 'Everyone is ready. Starting...'
-        : waiting && n.cap ? 'Take your time. Buy in or watch when you have read the rules.'
-        : waiting ? 'Take your time. Press Ready when you have read the rules.'
+        : waiting && n.cap ? 'No clock. Buy in or watch when you are set.'
+        : waiting ? 'No clock. Press Ready when you are set.'
         : names.length ? `Waiting for ${names.length > 3 ? names.slice(0, 3).join(', ') + ' and ' + (names.length - 3) + ' more' : names.join(', ')}` : '';
       const rb = $('bready'), sk = $('bskip');
       rb.hidden = n.go || !(backer || late) || (!waiting && !ready); rb.disabled = ready || n.go; rb.textContent = ready ? 'You are ready' : 'Ready';
@@ -866,7 +868,7 @@ const RH = (() => {
         cur = key; logKey = ''; $('bonus').classList.add('on'); accent(m.cat);
         box().innerHTML = `<div class="bhead"><div><span class="cat">${CAT_NAMES[m.cat]}</span><h2>${esc(m.name)}</h2></div>
           <div class="bmeta"><span class="bclock" hidden><b>0</b><small>s</small></span><button class="btn sm" id="brl" aria-expanded="false">Rules</button></div><div class="bt"><i></i></div></div>
-          <div class="brulespop" hidden>${rulesList(m.rules)}</div><div class="bplayers"></div><div class="calls mini"></div><div class="bbody"><div class="ga" id="ga"></div></div><div class="bfoot"><ul class="blog"></ul></div>`;
+          <div class="brulespop" hidden>${briefHtml(m.id, m.rules, true)}</div><div class="bplayers"></div><div class="calls mini"></div><div class="bbody"><div class="ga" id="ga"></div></div><div class="bfoot"><ul class="blog"></ul></div>`;
         $('brl').onclick = () => { const p = box().querySelector('.brulespop'), o = p.hidden; p.hidden = !o; $('brl').setAttribute('aria-expanded', o); $('brl').classList.toggle('on', o); };
         inst = { el: $('ga'), st: {} };
         if (r) r.mount(inst.el, inst.st, api(m));

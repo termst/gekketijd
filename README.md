@@ -65,14 +65,25 @@ Tuning: `CALL_CHIPS`, `CALL_GRACE`, `CALL_BONUS`, `EMOTES`, `EMOTE_GAP` in `publ
 
 ## Minigame look and feel
 
+Explainers: `public/games/brief.js` (`RH.Brief`) holds a quick read per game: one goal line, 3 numbered steps with line icons (named like the game's own step tracker, so the briefing and the game match), a payout strip where it helps and up to 3 extras. The briefing, the in-game Rules button and the How to play dialog all show it, with the full rules from `games/<category>/*.js` behind a Full rules toggle. A game without an entry falls back to the full rules list. When a game's rules change, update its entry too.
+
 Every minigame renderer uses the shared kit in `public/games/kit.js` (`RH.K`), so all 16 games read the same way:
 
-- Steps: a numbered tracker of the game's phases (for example Pick, Swap, Flip), the current one lit.
-- Cue: one line saying what to do right now. It pulses when it is your move.
-- Scoreboard: one chip per player with live values that tween, pop the change and flash up or down.
+- Steps: a numbered text line of the game's phases (for example Pick, Swap, Flip), the current one underlined in the category colour.
+- Cue: one line between two rules saying what to do right now. On your move it turns into a brass plate.
+- Scoreboard: one plate per player with a flat colour token and live values that tween, pop the change and flash up or down.
 - Effects: floating text (`pop`), confetti, sparks and coins (`burst`, one fixed canvas that only runs while particles live), shake and flash. Reduced motion settings skip particles and animations.
 - Shared canvases: wheels have chasing rim bulbs, shading, pulsing landing highlights and flapper ticks while spinning. Pachinko boards have shaded pegs, glowing pucks with trails and slot flashes.
 - Keyboard: Space for STOP, BRAKE, drop and lock; A and D (or arrows) to aim or tilt; R and B to call in Streak or Bank.
+
+## Look
+
+A fairground theatre at night: an oxblood velvet curtain (drawn once in `scenery()` in `client.js`, folds, a spotlight pool behind the wheel, vignette and fabric nap), a mahogany desk with a brass bulb rail, card stock tickets and a green baize table with a mahogany rail for bonus games.
+
+- Palette and textures live at the top of `public/style.css`: one brass (`--brass`, `--metal` for brass plates), one cream (`--pearl`), muted print reds and blues for the coin sides (`--red`, `--blue`). Textures are tiny inline SVG noise tiles: `--grain` (panels), `--paper` (tickets, coin sides), `--felttx` (baize), `--wood` (desk).
+- Panels are split by brass rules instead of boxes inside boxes. No neon glows or glossy gradients: selection is a cream or brass outline, the main action is a brass plate (`.go`, `.kbig`).
+- The lobby is an admission ticket: logo and wallet on top, a perforated seam with notches, the forms on the stub.
+- Player colours (`COLORS` in `core.js`) and the bonus category accents (`ACCENT` in `client.js`) are print inks that sit on velvet and baize.
 
 ## Wheel weighting
 

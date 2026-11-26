@@ -14,12 +14,15 @@
 
 <section id="lobby">
   <div class="card">
+   <div class="admit">
     <h1 class="logo"><img src="img/logo.webp" alt="Gekke Tijd" width="1008" height="598"></h1>
     <div class="life" aria-label="Wallet and lifetime stats">
       <div class="wallet"><small>Wallet</small><b><span class="orra-inline"></span><span id="lwal">500</span></b></div>
       <div class="won"><small>Won</small><b><span class="orra-inline"></span><span id="lwon">0</span></b></div>
       <div class="lost"><small>Lost</small><b><span class="orra-inline"></span><span id="llost">0</span></b></div>
     </div>
+   </div>
+   <div class="stubpart">
     <div id="home" class="view">
       <label>Your name<input id="nm" maxlength="16" autocomplete="nickname" placeholder="Name"></label>
       <div id="joinbox" class="grp">
@@ -38,6 +41,7 @@
       <div class="sacts"><button class="btn" id="sback">Back</button><button class="btn" id="sreset">Defaults</button><button class="btn go" id="sgo">Open lobby</button></div>
     </div>
     <p id="lerr" role="alert"></p>
+   </div>
   </div>
 </section>
 
@@ -80,6 +84,7 @@
 <script src="glove.js"></script>
 <script src="client.js"></script>
 <script src="games/kit.js"></script>
+<script src="games/brief.js"></script>
 <script src="games/spare-change.js"></script>
 <script src="games/cash-grab.js"></script>
 <script src="games/drop-dead.js"></script>

@@ -34,7 +34,7 @@
   // burst(x, y, opts): confetti at screen coords. opts: colors, n, kind (confetti, spark, coin), power, up
   function burst(x, y, o = {}) {
     if (CALM) return; canvas();
-    const cols = o.colors || ['#ffe58a', '#e6c673', '#ff6b5b', '#4fd68a', '#8ab8ff', '#fff'], n = o.n || 40, pw = o.power || 420, t0 = performance.now();
+    const cols = o.colors || ['#f6e3a8', '#d8b058', '#d4523a', '#f3e6c8', '#8ccb92', '#8aa6e6'], n = o.n || 40, pw = o.power || 420, t0 = performance.now();
     for (let i = 0; i < n; i++) {
       const a = (o.up ? -Math.PI / 2 : 0) + (o.up ? (Math.random() - .5) * 1.8 : Math.random() * RH.TAU), v = pw * (.35 + Math.random() * .75);
       parts.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - (o.up ? 0 : pw * .35), g: o.kind === 'spark' ? 300 : 900, r: Math.random() * 6, vr: (Math.random() - .5) * 14,
@@ -68,7 +68,7 @@
     el.innerHTML = names.map((n, j) => `<span class="${j < i ? 'done' : j === i ? 'on' : ''}"><b>${j + 1}</b>${esc(n)}</span>`).join('<i></i>');
   }
 
-  // ---- Cue: what you should do right now. kind: you (your move, pulses), wait, good, bad, info ----
+  // ---- Cue: what you should do right now. kind: you (your move, brass plate), wait, good, bad, info ----
   function cue(el, big, small = '', kind = 'info') {
     const k = big + '|' + small + '|' + kind; if (el.dataset.k === k) return; el.dataset.k = k;
     const fresh = el.dataset.kind !== kind || el.dataset.big !== big; el.dataset.kind = kind; el.dataset.big = big;
