@@ -447,6 +447,18 @@ const RH = (() => {
     };
     const SND_TXT = { on: ['Sound 100%', 'Sound on, click for 45% volume'], low: ['Sound 45%', 'Sound at 45%, click to mute'], off: ['Muted', 'Sound off, click for full volume'] };
     const sndLabel = () => { const b = $('snd'); b.innerHTML = SND_ICON[sndMode]; b.setAttribute('aria-pressed', sndMode !== 'off'); b.setAttribute('aria-label', SND_TXT[sndMode][1]); b.title = SND_TXT[sndMode][0]; b.classList.toggle('muted', sndMode === 'off'); b.classList.toggle('low', sndMode === 'low'); };
+    // Hand switch: hides the Glove (glove.js) and stops its actions. Saved in this browser.
+    const HAND = '<path d="M7 12V6.5a1.5 1.5 0 0 1 3 0V11M10 11V4.5a1.5 1.5 0 0 1 3 0V11M13 11V5.5a1.5 1.5 0 0 1 3 0V12M16 12V8.5a1.5 1.5 0 0 1 3 0V15a6 6 0 0 1-6 6h-1.5a6 6 0 0 1-4.7-2.3L4.4 15.6a1.5 1.5 0 0 1 2.3-1.9L7 14z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>';
+    const HAND_ICON = {
+      on: `<svg viewBox="0 0 24 24" aria-hidden="true">${HAND}</svg>`,
+      off: `<svg viewBox="0 0 24 24" aria-hidden="true"><mask id="hmask"><rect width="24" height="24" fill="#fff"/><path d="M3.5 3.5l17 17" stroke="#000" stroke-width="5" stroke-linecap="round"/></mask><g mask="url(#hmask)">${HAND}</g><path d="M3.5 3.5l17 17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`
+    };
+    let handOn = store.get('rh-hand') !== 'off';
+    const handLabel = () => { const b = $('hand'); b.innerHTML = HAND_ICON[handOn ? 'on' : 'off']; b.setAttribute('aria-pressed', handOn); b.setAttribute('aria-label', handOn ? 'Hand on, click to hide' : 'Hand off, click to show'); b.title = handOn ? 'Hand on' : 'Hand off'; b.classList.toggle('off', !handOn); };
+    handLabel(); if (G_ && !handOn) G_.enable(false);
+    $('hand').onclick = () => { handOn = !handOn; store.set('rh-hand', handOn ? 'on' : 'off'); if (G_) G_.enable(handOn); handLabel(); toast(handOn ? 'Hand on' : 'Hand off', 1200); };
+    // Logo: leave the lobby (ask first, the host leaving closes it for everyone).
+    $('leave').onclick = () => { if (!confirm(S && S.host === S.you ? 'Leave this lobby? You are the host, so it closes for everyone.' : 'Leave this lobby?')) return; try { sessionStorage.removeItem('rh-room'); } catch {} location.href = location.pathname; };
     sndLabel(); $('snd').onclick = () => { sndMode = SND_NEXT[sndMode]; applySnd(); store.set('rh-sound', sndMode); sndLabel(); if (sndMode !== 'off') sfx('token_place', .5); toast(SND_TXT[sndMode][0], 1200); };
     ['rules', 'work'].forEach(id => $(id).onclick = e => { if (e.target === $(id)) $(id).close(); });
     $('invite').onclick = () => {
@@ -542,7 +554,7 @@ const RH = (() => {
       history.replaceState(null, '', location.pathname + '?join=' + m.code);
       try { sessionStorage.setItem('rh-room', m.code); } catch {}
       if (document.fonts) document.fonts.ready.then(() => { makeArt(); draw(); });
-      if (G_) G_.init({ wheel: wheelInfo, nudge: wheelNudge });
+      if (G_) { G_.init({ wheel: wheelInfo, nudge: wheelNudge }); if (store.get('rh-hand') === 'off') G_.enable(false); }
     }
     if (G_) {
       G_.room({ phase: m.phase, round: m.round, left: m.phase === 'betting' && m.ends ? m.ends - now() : 0, allReady: m.phase === 'betting' && m.players.every(p => !p.online || p.ready) });
