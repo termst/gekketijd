@@ -1619,6 +1619,8 @@ const Glove = (() => {
     // entrance: drops in from above, presents itself
     rig.x.x = rig.x.t = W * rnd(.3, .7); rig.y.x = rig.y.t = -S0 * 4; rig.z.x = rig.z.t = .6;
     started = true;
+    // Switched off before init (saved setting): stay hidden, enable(true) brings it in later.
+    if (hidden) { [cv, fxc].forEach(c => c.style.display = 'none'); requestAnimationFrame(frame); return; }
     run('enter', async c => { c.snd('glove-enter', { delay: 250, late: 2000 }, W / 2); c.pose('open', 60); c.orient(rnd(-.3, .3), PI, -.3, 40); await c.goPt('mid', W * rnd(.35, .65), Hh * .32, { dur: 1600, path: 's', ease: 'cubic', z: .55 }); await R.wave(c); }, 3);
     requestAnimationFrame(frame);
   }
@@ -1659,7 +1661,7 @@ const Glove = (() => {
   }
   // Player switch: hides the hand and stops every action. Turning it back on lets the hand drop in again.
   // Off: if the hand is on screen it flips you off and leaves (exitAct) before it hides. On again mid exit: it stays.
-  function hideNow() { leaving = false; hidden = true; if (cur) kill(cur); cur = null; unlock(); queue.length = 0; [cv, fxc].forEach(c => c.style.display = 'none'); }
+  function hideNow() { leaving = false; hidden = true; if (cur) kill(cur); cur = null; unlock(); queue.length = 0; [cv, fxc].forEach(c => { if (c) c.style.display = 'none'; }); }
   function enable(on) {
     if (on) {
       if (leaving) { leaving = false; if (cur) kill(cur); cur = null; unlock(); return; }
