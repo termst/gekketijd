@@ -80,7 +80,8 @@ const Glove = (() => {
     fist: mk(FF, [.42, 1.05, .55, .65]),
     point: mk([EXT(-.05), FF[1], FF[2], FF[3]], TUCK),
     thumb: mk(FF, [1.45, .05, -.05, 0]),
-    middle: mk([[-.02, 1.6, 1.85, 1.05], [0, 0, .03, .02], [.02, 1.62, 1.88, 1.05], FF[3]], TUCK),
+    // the curled fingers fold less deep than a fist, so their knuckles show as bumps on both sides of the raised finger
+    middle: mk([[.06, 1.2, 1.75, 1.0], [0, 0, .03, .02], [-.04, 1.2, 1.8, 1.0], [.04, 1.25, 1.75, 1.0]], TUCK),
     gun: mk([EXT(-.06), FF[1], FF[2], FF[3]], [1.3, 0, -.05, 0]),
     ok: mk([[-.1, .75, .95, .62], [0, .12, .12, .08], [.14, .16, .14, .1], [.32, .2, .16, .1]], [.75, .85, .32, .42]),
     pinch: mk([[-.1, .62, .55, .42], [-.02, .7, .9, .6], [.06, .8, 1.0, .7], [.16, .9, 1.05, .75]], [.78, .8, .25, .3]),
@@ -130,7 +131,7 @@ const Glove = (() => {
   function setThumb(t, k = 200) { t.forEach((v, j) => v != null && rig.P[16 + j].to(v, k)); }
 
   // ---------------------------------------------------------------- Page state
-  let A = null, cv, g, fxc, fg, Hb, hb, Cb, cb, dpr = 1, W = 1, Hh = 1, S0 = 60, T = 0, lastT = 0, started = false, hidden = false, HAS_FILTER = false;
+  let A = null, cv, g, fxc, fg, Hb, hb, Cb, cb, dpr = 1, W = 1, Hh = 1, S0 = 60, T = 0, lastT = 0, started = false, hidden = false, leaving = false, HAS_FILTER = false;
   let fxDirty = false, layer = '', lastSk = null, lastPos = [0, 0];
   const st = { phase: 'betting', round: -1, endsAt: 0, allReady: false, agit: .25, prepRound: -2, countRound: -2, spinT0: 0, spinA0: 0, spinEnd: 0, spinPlan: null, lastReact: 0, players: 0, overlay: false };
   const $ = s => document.querySelector(s);
@@ -686,6 +687,43 @@ const Glove = (() => {
   function wheelPt(rf = rnd(.3, .85), ang = rnd(0, TAU)) { const w = wheel(); return w ? [w.x + Math.cos(ang) * w.r * rf, w.y + Math.sin(ang) * w.r * rf] : null; }
   const towardViewer = () => [W * rnd(.32, .68), Hh * rnd(.28, .5)];
 
+  // ---------------------------------------------------------------- Middle finger
+  const MIDP = .6; // pitch for the bird: tips the fingers toward the viewer so the folded knuckles show
+  // From a fist: the middle finger springs up past straight, settles, the hand pops in scale. o.wag: a little waggle after.
+  async function flipOff(c, o = {}) {
+    if (rig.pose !== 'fist' && rig.pose !== 'middle') { c.pose('fist', 260); await c.wait(o.load ?? 160); }
+    c.pose('middle', 420, 0); setFinger(1, [-.32, -.14, -.06], 760);
+    c.snd('glove-middle', { vol: o.vol || 1 }, rig.x.x); c.scale(1.15, 700); c.trem(0);
+    await c.wait(120); setFinger(1, [0, .03, .02], 240); c.scale(1, 220); await c.wait(160);
+    if (o.wag ?? chance(.5)) await rock(c, 2, .1, 120, rig.roll.t);
+  }
+  // Switched off with the hand button: one last bird, then a whimsical exit instead of popping out of existence.
+  async function exitAct(c) {
+    c.over(true); c.hov(0); c.breath(.4);
+    const base = rnd(-.12, .12), at = [W * rnd(.4, .6), Hh * rnd(.36, .46)];
+    c.pose('fist', 160); c.orient(base, rnd(-.2, .2), MIDP, 90);
+    await c.goPt('mid', at[0], at[1], { speed: 1500, path: any(['swoop', 's', 'arc']), z: .75 });
+    await c.wait(260); await flipOff(c, { wag: 1 });
+    c.trem(.12); await c.wait(900); c.trem(0);
+    // pirouette away: two spins while it shrinks behind the HUD and zips off the top
+    c.snd('glove-twirl', { set: 'slick' }, rig.x.x);
+    const r0 = rig.roll.x, side = sgn(), exitX = clamp(rig.x.x + side * W * rnd(.25, .4), S0, W - S0);
+    const away = c.go(exitX, -S0 * 5, { dur: 1300, path: 'loop', side, ease: 'in', z: -.6, zk: 18, bank: .2 });
+    await c.tween(900, u => { rig.roll.to(r0 + side * u * TAU * 2, 260); rig.sc.to(1 - u * .25, 200); }, E.cubic);
+    c.snd('glove-whoosh', { vol: .6, rate: 1.15 }, rig.x.x);
+    await away; c.scale(1, 200);
+    // one last peek from the side edge: a tiny bye bye with the fingers, then gone
+    await c.wait(rnd(350, 600));
+    const ex = side > 0 ? W + S0 * 3 : -S0 * 3, py = Hh * rnd(.55, .75);
+    rig.x.x = rig.x.t = ex; rig.y.x = rig.y.t = py; rig.x.v = rig.y.v = 0; rig.z.x = rig.z.t = .5;
+    const lean = side > 0 ? -.5 : .5; c.pose('open', 200); c.orient(lean, PI, 0, 200);
+    await c.go(side > 0 ? W - S0 * 1.1 : S0 * 1.1, py, { dur: 520, path: 'direct', ease: 'cubic', z: .5 });
+    c.snd('glove-wave', { vol: .55 }, rig.x.x);
+    for (let i = 0; i < 3; i++) { c.orient(lean + .32, null, null, 260); for (let f = 0; f < 4; f++) setFinger(f, [.7, .5, .3], 600); await c.wait(130); c.orient(lean - .2, null, null, 260); for (let f = 0; f < 4; f++) setFinger(f, [.02, .03, .02], 600); await c.wait(130); }
+    c.orient(lean, null, null, 200); await c.wait(120);
+    await c.go(ex, py + S0, { dur: 280, path: 'direct', ease: 'in' });
+  }
+
   // ---------------------------------------------------------------- Gestures and reactions
   const R = {
     async thumbsUp(c, d = {}) {
@@ -851,46 +889,49 @@ const Glove = (() => {
     async quickOk(c) { await show(c, { pose: 'ok', which: 'middle', ang: -PI / 2, yaw: PI, pitch: .1, z: .4, speed: 1300 }); await c.wait(500); },
     async peace(c, d = {}) { await show(c, { pose: 'peace', which: 'middle', ang: -PI / 2 + rnd(-.3, .3), yaw: any([0, PI]), pitch: .1, z: .5, over: d.over }); await bob(c, 1, -S0 * .2, 140); await c.wait(500); },
     async countUp(c) { await show(c, { pose: 'n1', which: 'middle', ang: -PI / 2, yaw: PI, pitch: 0, z: .5 }); for (let n = 1; n <= 5; n++) { c.pose('n' + n, 260); c.snd('glove-count', { file: 'glove-count-' + Math.min(3, n), rate: n > 3 ? 1 + (n - 3) * .07 : 1 }); c.scale(1.08, 400); await c.wait(150); c.scale(1, 200); await c.wait(140); } await c.wait(300); },
-    // ---- middle finger: explicit, held, many deliveries
+    // ---- middle finger: explicit, held, many deliveries.
+    // Every delivery tips the fingers toward the viewer (MIDP) so the folded knuckles read, and goes through flipOff:
+    // the finger springs up past straight and settles, with a pop in scale.
     async middleSlow(c) {
       c.over(true); c.pose('fist', 120);
-      const at = [W * rnd(.35, .65), Hh * rnd(.35, .5)]; c.orient(rnd(-.15, .15), rnd(-.25, .25), .3, 60);
-      const w = wristFor(tipOf('middle', 'mid'), at[0], at[1], rig.roll.t, rig.yaw.t, .3, .7);
+      const at = [W * rnd(.35, .65), Hh * rnd(.35, .5)]; c.orient(rnd(-.15, .15), rnd(-.25, .25), MIDP, 60);
+      const w = wristFor(tipOf('middle', 'mid'), at[0], at[1], rig.roll.t, rig.yaw.t, MIDP, .7);
       await offstage(c, w[0], Hh + S0 * 3);
       await c.go(w[0], w[1], { dur: 1100, path: 'direct', z: .7, ease: 'cubic' });
-      setFinger(1, [0, .03, .02], 18); c.snd('glove-middle'); await c.wait(1300);
+      await c.wait(350); await flipOff(c); await c.wait(900);
       c.depth(.98, 40); c.scale(1.08, 60); await c.wait(900); c.depth(.7, 60); c.scale(1, 60); await c.wait(500);
     },
     async middleJab(c) {
-      c.over(true); c.pose('middle', 400);
-      const at = towardViewer(); c.aim('middle', -PI / 2 + rnd(-.2, .2), rnd(-.3, .3), .35, 200);
+      c.over(true); c.pose('fist', 300);
+      const at = towardViewer(); c.aim('middle', -PI / 2 + rnd(-.2, .2), rnd(-.3, .3), MIDP, 200);
       await c.goPt('mid', at[0], at[1], { speed: 1800, path: any(['direct', 'lurch', 'swoop']), z: .65 });
-      c.snd('glove-middle');
+      await flipOff(c, { wag: 0 });
       for (let i = 0; i < 3; i++) { c.depth(1.05, 500); c.scale(1.12, 600); await c.wait(120); const tp = c.tip('middle'); c.burst(tp[0], tp[1], 'tap', 1.2); c.depth(.65, 300); c.scale(1, 300); await c.wait(220); }
       await c.wait(900);
     },
     async middleTurn(c) {
+      // walks in showing the palm, then turns the back of the hand to you
       c.over(true); c.pose('middle', 200);
       const at = towardViewer(); c.orient(rnd(-.2, .2), PI, .2, 80);
       await c.goPt('mid', at[0], at[1], { speed: 1000, path: pathPick(), z: .6 });
-      await c.wait(250); c.orient(null, rnd(-.15, .15), .35, 30); c.snd('glove-middle'); await c.wait(1100);
+      await c.wait(250); c.orient(null, rnd(-.15, .15), MIDP, 30); await c.wait(320); c.pose('fist', 500); await c.wait(120); await flipOff(c, { load: 0 }); await c.wait(700);
       await rock(c, 2, .08, 260, rig.roll.t); await c.wait(500);
     },
     async middleRise(c) {
       c.over(true); c.pose('middle', 300);
-      const x = W * rnd(.25, .75), roll = rnd(-.15, .15); c.orient(roll, rnd(-.2, .2), .15, 200);
-      const w = wristFor(tipOf('middle', 'middle'), x, Hh - S0 * 1.2, roll, rig.yaw.t, .15, .5);
+      const x = W * rnd(.25, .75), roll = rnd(-.15, .15); c.orient(roll, rnd(-.2, .2), MIDP * .8, 200);
+      const w = wristFor(tipOf('middle', 'middle'), x, Hh - S0 * 1.2, roll, rig.yaw.t, MIDP * .8, .5);
       await offstage(c, w[0], Hh + S0 * 4); c.depth(.5, 60);
       await c.go(w[0], w[1], { dur: 2200, path: 'direct', ease: 'lurch', z: .5 });
-      c.snd('glove-middle'); c.trem(.25); await c.wait(1200); c.trem(0);
+      c.snd('glove-middle'); c.scale(1.1, 500); c.trem(.25); await c.wait(160); c.scale(1, 200); await c.wait(1040); c.trem(0);
       await c.go(w[0], Hh + S0 * 4, { dur: 600, path: 'direct', ease: 'in' });
     },
     async middleDouble(c) {
       c.over(true);
       for (let k = 0; k < 2; k++) {
-        c.pose('fist', 300); const at = freshSpot(stageSpot); c.aim('middle', -PI / 2 + rnd(-.3, .3), rnd(-.3, .3), .3, 200);
+        c.pose('fist', 300); const at = freshSpot(stageSpot); c.aim('middle', -PI / 2 + rnd(-.3, .3), rnd(-.3, .3), MIDP, 200);
         await c.goPt('mid', at[0], at[1], { speed: 1600, path: any(['arc', 'swoop']), z: .6 });
-        c.pose('middle', 900); c.snd('glove-middle', { vol: k ? 1 : .85 }); c.scale(1.12, 600); await c.wait(160); c.scale(1, 200); await c.wait(rnd(700, 900));
+        await flipOff(c, { vol: k ? 1 : .85, wag: k }); await c.wait(rnd(600, 800));
       }
     },
     // ---- added gestures. Sound cue timings (ms from the cue before) are listed next to each c.snd call.
@@ -1493,7 +1534,7 @@ const Glove = (() => {
   const PRI = { briefReady: 3, briefGo: 4, poked: 3, bonusLoss: 5, bonusWin: 5, win: 5, bigwin: 5, loss: 5, nobet: 4, levelUp: 4, landedBonus: 4, refused: 3, ready: 3, round: 2, bet: 2, join: 2, leave: 2, bonusWatch: 4 };
   const MOOD = { win: [-.1, .3], bigwin: [.2, .6], loss: [.35, -.2], bonusLoss: [.45, -.3], refused: [.25, 0], bonusWin: [0, .5] };
   function react(type, d = {}) {
-    if (!started || hidden || CALM && /punch/.test(type)) return;
+    if (!started || hidden || leaving || CALM && /punch/.test(type)) return;
     const list = REACT[type]; if (!list) return;
     const m = MOOD[type]; if (m) st.agit = clamp(st.agit + m[0], 0, 1);
     const pri = PRI[type] || 2;
@@ -1503,7 +1544,7 @@ const Glove = (() => {
     run(type + ':' + name, async c => { c.over(OVER.has(type)); await (R[name] || IDLE[name])(c, { ...d, type, over: OVER.has(type) }); c.over(false); }, pri, d);
   }
   function director() {
-    if (!started) return;
+    if (!started || leaving) return;
     const tn = now();
     // anticipation: get to the wheel before betting closes
     if (st.phase === 'betting' && !CALM && st.round !== st.prepRound && (!cur || cur.pri < 6)) {
@@ -1549,7 +1590,7 @@ const Glove = (() => {
   // A press on the hand: completes a high five, otherwise a flinch (3 pokes within 6 s: a scolding).
   // Busy with something important (wheel, results): only a shiver, the action carries on.
   function poke(e) {
-    if (!started || !hand.on || layer === 'deep') return;
+    if (!started || leaving || !hand.on || layer === 'deep') return;
     const x = e.clientX, y = e.clientY;
     if (hyp(x - hand.x, y - hand.y) > hand.r * 1.05) return;
     if (five) { five.hit = true; return; }
@@ -1593,7 +1634,7 @@ const Glove = (() => {
   }
   // Called when the server starts a spin. Returns how long the page should wait before the wheel moves, and its shape.
   function spin(sp, remain) {
-    if (!started || hidden || CALM) return { delay: 0, shape: r => spinShape(null, r) };
+    if (!started || hidden || leaving || CALM) return { delay: 0, shape: r => spinShape(null, r) };
     st.spinT0 = 0;
     let plan = st.spinPlan, delay = 0;
     const cocked = cur && cur.name === 'spin' && !cur.dead && cur.state === 'cocked';
@@ -1610,19 +1651,27 @@ const Glove = (() => {
   }
   function spinGo(info = {}) { const w = wheel(); st.spinA0 = w ? w.a : 0; st.spinT0 = now(); st.spinEnd = now() + (info.remain || 4000); st.phase = 'spinning'; }
   function emit(type, d = {}) {
-    if (!started || hidden) return;
+    if (!started || hidden || leaving) return;
     if (type === 'bet') { if (now() - st.lastReact < 2500 || !chance(.4) || st.phase !== 'betting') return; }
     if (type === 'payout') { const { stake = 0, win = 0 } = d; type = !stake ? 'nobet' : win > stake * 4 ? 'bigwin' : win > stake ? 'win' : 'loss'; }
     if (type === 'bonusResult') { const { stake = 0, win = 0 } = d; type = !stake ? 'bonusWatch' : (d.m ?? win / stake - 1) < 1 ? 'bonusLoss' : 'bonusWin'; }
     react(type, d);
   }
   // Player switch: hides the hand and stops every action. Turning it back on lets the hand drop in again.
+  // Off: if the hand is on screen it flips you off and leaves (exitAct) before it hides. On again mid exit: it stays.
+  function hideNow() { leaving = false; hidden = true; if (cur) kill(cur); cur = null; unlock(); queue.length = 0; [cv, fxc].forEach(c => c.style.display = 'none'); }
   function enable(on) {
-    if (hidden === !on) return;
-    hidden = !on;
-    if (!started) return;
-    if (hidden) { if (cur) kill(cur); cur = null; unlock(); [cv, fxc].forEach(c => c.style.display = 'none'); }
-    else { [cv, fxc].forEach(c => c.style.display = ''); rig.x.x = rig.x.t = W * rnd(.3, .7); rig.y.x = rig.y.t = -S0 * 4; rig.z.x = rig.z.t = .6; run('enter', async c => { c.pose('open', 60); c.orient(rnd(-.3, .3), PI, -.3, 40); await c.goPt('mid', W * rnd(.35, .65), Hh * .32, { dur: 1600, path: 's', ease: 'cubic', z: .55 }); await R.wave(c); }, 3); }
+    if (on) {
+      if (leaving) { leaving = false; if (cur) kill(cur); cur = null; unlock(); return; }
+      if (!hidden) return; hidden = false;
+      if (!started) return;
+      [cv, fxc].forEach(c => c.style.display = ''); rig.x.x = rig.x.t = W * rnd(.3, .7); rig.y.x = rig.y.t = -S0 * 4; rig.z.x = rig.z.t = .6; run('enter', async c => { c.pose('open', 60); c.orient(rnd(-.3, .3), PI, -.3, 40); await c.goPt('mid', W * rnd(.35, .65), Hh * .32, { dur: 1600, path: 's', ease: 'cubic', z: .55 }); await R.wave(c); }, 3);
+      return;
+    }
+    if (hidden || leaving) return;
+    if (!started || CALM || !hand.on) { hideNow(); return; }
+    leaving = true; queue.length = 0; if (cur) kill(cur); cur = null; unlock();
+    run('exit', async c => { try { await exitAct(c); } finally { if (leaving) hideNow(); } }, 99);
   }
   return { init, enable, room, spin, spinGo, emit, spinCurve, get state() { return { cur: cur && cur.name, phase: st.phase, layer, agit: st.agit }; }, _R: R, _IDLE: IDLE, _run: (n, pri = 7) => run('debug:' + n, c => (R[n] || IDLE[n] || WATCH[n])(c, {}), pri) };
 })();
