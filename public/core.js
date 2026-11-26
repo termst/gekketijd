@@ -85,6 +85,12 @@ const GO_MS = 1500, BRIEF_MAX = 5 * 60000, LATE_PAY = 0.6;
 const lateShare = (backers, online) => Math.min(0.5, 0.25 + 0.25 * backers / Math.max(1, online));
 const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 const round2 = x => Math.round(x * 100) / 100;
+// Call It: during a bonus briefing (and the first CALL_GRACE ms of the game) anyone, players and spectators, may put one chip
+// on the player they think tops the game. Pari-mutuel: right callers get their chip back plus CALL_BONUS, plus a share of the
+// wrong calls in proportion to their chip. Nobody right, or nobody scored: every chip goes back.
+const CALL_CHIPS = [5, 10, 25, 50], CALL_GRACE = 6000, CALL_BONUS = 0.2;
+// Taunts: short preset lines anyone can send, shown as speech bubbles. Index into the client's list, rate limited.
+const EMOTES = 12, EMOTE_GAP = 900;
 // Wallet savings: in a fixed balance run part of every winning round is saved to the player's own wallet.
 // It never touches the run balance, so gameplay is unchanged. The cut:
 //   profit  = round win minus everything staked that round (betting all fields earns nothing)
@@ -106,7 +112,7 @@ class Room {
     this.cfg = runCfg(cfg); this.code = code; this.players = new Map(); this.phase = 'betting'; this.ends = 0; this.bets = {}; this.ready = new Set();
     this.boost = null; this.hist = []; this.dry = 0; this.spin = null; this.bonus = null; this.msg = ''; this.timer = null;
     this.last = {}; this.results = null; this.late = new Set(); this.passed = new Set(); this.spent = {}; this.round = 0; this.force = null; this.idle = null;
-    this.host = null; this.briefed = new Set(); this.introGo = false;
+    this.host = null; this.briefed = new Set(); this.introGo = false; this.calls = {}; this.callUntil = 0; this.callRes = null;
     this.battle = this.cfg.mode === 'battle' ? this.freshBattle() : null;
     if (this.battle) this.phase = 'wait';
   }
@@ -241,7 +247,7 @@ class Room {
     const top = Math.max(...ids.map(pid => this.stakes[pid][key])), share = lateShare(ids.length, ids.length + on.length);
     this.msg = `${t.n}: ${g.name}`;
     this.phase = 'intro'; this.nextGame = { id: g.id, name: g.name, cat: key, rules: g.rules, top, share, backers: ids };
-    this.passed = new Set(); this.briefed = new Set(); this.introGo = false;
+    this.passed = new Set(); this.briefed = new Set(); this.introGo = false; this.calls = {}; this.callRes = null; this.callUntil = 0;
     this.go = () => this.startBonus(key, g, ids.concat([...this.late].filter(pid => this.players.has(pid))));
     this.after(BRIEF_MAX, this.go); this.ends = 0;   // no visible clock: players take the time they need
     this.broadcast();
@@ -267,6 +273,7 @@ class Room {
     this.tally(key, wins);
     rows.sort((a, b) => b.win - a.win);
     this.results = { key, rows };
+    if (this.callRes && BONUS_KEYS.includes(key)) { this.results.calls = this.callRes; this.callRes = null; }
     if (this.battle) this.results.battle = this.settle(Object.fromEntries(rows.map(r => [r.id, r.win - r.spent])));
     this.phase = 'payout'; saveSoon();
     this.after(BONUS_KEYS.includes(key) ? 5000 : 3500, () => this.startBetting());
@@ -349,15 +356,44 @@ class Room {
         inst.final = out;
         room.msg = `${mod.name} is over`;
         room.lastBonus = { id: inst.id, name: inst.name, final: out };
+        room.settleCalls(out);
         room.pay(key, out);
       }
     };
     inst.kill = () => { done = true; timers.forEach(t => { clearTimeout(t); clearInterval(t); }); };
-    this.bonus = inst; this.phase = 'bonus'; this.ends = 0;
+    this.bonus = inst; this.phase = 'bonus'; this.ends = 0; this.callUntil = Date.now() + CALL_GRACE;
     inst.game = mod.create(ctx);
     this.broadcast();
     try { inst.game.start(); } catch (e) { console.error(e); ctx.end({}); }
     if (this.bonus === inst) this.pushBonus();
+  }
+  // ---- Call It ----
+  callOpen() { return this.phase === 'intro' || (this.phase === 'bonus' && Date.now() < this.callUntil); }
+  callable() { return this.phase === 'intro' && this.nextGame ? this.nextGame.backers.concat([...this.late]) : this.bonus ? this.bonus.ids : []; }
+  call(p, on, amt) {
+    if (!this.callOpen() || this.calls[p.id] || !this.inPlay(p)) return;
+    if (!CALL_CHIPS.includes(amt) || !this.callable().includes(on)) return;
+    if (this.bal(p) < amt) return p.conn && p.conn.send({ t: 'err', msg: 'Not enough Orra for that call.' });
+    this.add(p, -amt); this.calls[p.id] = { on, amt }; saveSoon();
+    if (this.bonus) this.bonus.log.unshift(`${p.name} calls ${this.players.get(on) ? this.players.get(on).name : '?'} to win`);
+    this.broadcast();
+  }
+  settleCalls(out) {
+    const list = Object.entries(this.calls); this.calls = {};
+    if (!list.length) return;
+    const best = Math.max(0, ...Object.values(out)), tops = best > 0 ? Object.keys(out).filter(id => out[id] === best) : [];
+    const pool = list.reduce((a, [, c]) => a + c.amt, 0), right = list.filter(([, c]) => tops.includes(c.on)), rs = right.reduce((a, [, c]) => a + c.amt, 0);
+    this.callRes = list.map(([id, c]) => {
+      const hit = tops.includes(c.on), win = !right.length ? c.amt : hit ? Math.round(c.amt * (1 + CALL_BONUS) + (pool - rs) * c.amt / rs) : 0;
+      const p = this.players.get(id); if (p && win) this.add(p, win);
+      return { id, on: c.on, amt: c.amt, win, hit, refund: !right.length };
+    }).sort((a, b) => b.win - a.win);
+    saveSoon();
+  }
+  emote(p, k) {
+    if (!Number.isInteger(k) || k < 0 || k >= EMOTES) return;
+    const t = Date.now(); if (t - (p.emoteAt || 0) < EMOTE_GAP) return; p.emoteAt = t;
+    for (const q of this.players.values()) if (q.conn) q.conn.send({ t: 'emote', from: p.id, k });
   }
   pushBonus() {
     const b = this.bonus; if (!b) return;
@@ -487,6 +523,8 @@ class Room {
       this.briefed.add(p.id); this.broadcast(); return this.introCheck();
     }
     if (m.t === 'bskip') return this.introSkip(p);
+    if (m.t === 'call') return this.call(p, String(m.on || ''), +m.amt);
+    if (m.t === 'emote') return this.emote(p, m.k);
     if (m.t === 'ready') {
       if (this.phase !== 'betting' || !this.inPlay(p)) return;
       this.ready.add(p.id); this.broadcast(); return this.checkReady();
@@ -527,6 +565,7 @@ class Room {
       battle: this.battle ? { ...this.battle, target: this.cfg.start * this.cfg.target, every: STORM_EVERY[this.cfg.storm], nextAnte: anteFor(this.cfg, (this.battle.storm + 1) * STORM_EVERY[this.cfg.storm] + 1), alive: this.alive.length, maxStorm: STORM_PCT.length } : null, prof: pr, phase: this.phase, ends: this.ends, now: Date.now(), round: this.round,
       boost: this.boost, hist: this.hist, msg: this.msg, spin: this.spin, landed: this.phase === 'betting' ? null : this.landedKey,
       next: this.phase === 'intro' ? { ...this.nextGame, cap: this.lateCap(me), passed: this.passed.has(pid), late: [...this.late], latePay: LATE_PAY, ready: [...this.briefed], wait: this.introWait().map(q => q.id), go: this.introGo } : null, results: this.phase === 'payout' || this.phase === 'landed' ? this.results : null,
+      calls: this.phase === 'intro' || this.phase === 'bonus' ? { list: this.calls, open: this.callOpen(), until: this.phase === 'bonus' ? this.callUntil : 0, on: this.callable(), chips: CALL_CHIPS, bonus: CALL_BONUS } : null,
       players: [...this.players.values()].map(p => ({
         id: p.id, name: p.name, color: p.color, online: !!(p.conn && p.conn.open), bal: this.bal(p), lvl: p.prof.lvl,
         bets: this.phase === 'betting' ? (this.bets[p.id] || {}) : ((this.stakes || {})[p.id] || {}),
